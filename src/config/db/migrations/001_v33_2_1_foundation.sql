@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS schema_migrations (id TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, actor_type TEXT, actor_id TEXT, action TEXT NOT NULL, entity_type TEXT, entity_id TEXT, metadata_json TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS notifications (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, type TEXT NOT NULL, title TEXT, body TEXT, read_at TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS fraud_events (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, event_type TEXT NOT NULL, score INTEGER DEFAULT 0, metadata_json TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS feature_registry (key TEXT PRIMARY KEY, version TEXT NOT NULL, status TEXT NOT NULL, notes TEXT);
+INSERT OR REPLACE INTO feature_registry VALUES ('legacy_v1_v32','V1-V32','preserved','Historical architecture remains part of the consolidation baseline');
+INSERT OR REPLACE INTO feature_registry VALUES ('v33_1_1_to_v33_1_31','V33.1.1-V33.1.31','planned_modules','All previously defined modules are tracked for implementation without deletion');
+INSERT OR REPLACE INTO feature_registry VALUES ('v33_2_1_foundation','V33.2.1','implemented','Modular Express/SQLite foundation, request IDs, security middleware, migrations, health/version endpoints');
+INSERT OR REPLACE INTO feature_registry VALUES ('v33_2_2_to_v33_2_5','V33.2.2-V33.2.5','architecture','Auth, wallet/ledger, withdrawals/payments, financial admin controls retained as consolidation requirements');
+INSERT OR REPLACE INTO feature_registry VALUES ('v33_2_6_tasks_ledger','V33.2.6','implemented_core','Task listing/start/submit/review, immutable user ledger credits, idempotent task rewards');
