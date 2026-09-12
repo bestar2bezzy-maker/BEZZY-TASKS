@@ -1,0 +1,29 @@
+{
+  "version": "33.2.7",
+  "name": "bezzy-tasks",
+  "status": "staging-ready-auth-reconciled",
+  "preserved": [
+    "V1-V32",
+    "V33.1.1-V33.1.31",
+    "V33.2.1-V33.2.5 architecture"
+  ],
+  "implemented": [
+    "auth-basic",
+    "tasks",
+    "task-submission",
+    "task-review",
+    "immutable-user-ledger-reward",
+    "idempotent-reward",
+    "production-env-guards",
+    "pm2-fork-config",
+    "nginx-reverse-proxy-template",
+    "sqlite-backup-script",
+    "deployment-script",
+    "release-checklist",
+    "phone-country-auth-reconciliation",
+    "countries-endpoint",
+    "compatible-me-profile",
+    "auth-migration-v33.2.7"
+  ],
+  "release_gate": "pending-real-provider-and-infrastructure-credentials"
+}
