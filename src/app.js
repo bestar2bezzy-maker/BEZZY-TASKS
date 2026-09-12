@@ -1,1 +1,20 @@
-
+const express = require('express');
+const helmet = require('helmet');
+const cors = require('cors');
+const { env } = require('./config/env');
+const requestId = require('./middleware/requestId');
+const rateLimit = require('./middleware/rateLimit');
+const api = require('./routes');
+require('./config/database');
+const app = express();
+app.disable('x-powered-by');
+app.set('trust proxy', 1);
+app.use(requestId);
+app.use(helmet({ contentSecurityPolicy:false, hsts: env.NODE_ENV === 'production' }));
+app.use(cors({ origin: env.CORS_ORIGIN === '*' ? true : env.CORS_ORIGIN, credentials: true }));
+app.use(express.json({ limit:'1mb', verify:(req, res, buf)=>{ req.rawBody = Buffer.from(buf); } }));
+app.use('/api', rateLimit({windowMs:60000,max:180}), api);
+app.use(express.static(require('path').join(__dirname,'../public')));
+const {notFound,errorHandler}=require('./middleware/errorHandler');
+app.use(notFound); app.use(errorHandler);
+module.exports=app;
