@@ -14,18 +14,22 @@ router.get('/balance', (req, res, next) => {
 
     const entries = db.prepare(`
       SELECT
-        amount,
-        currency
-      FROM ledger_entries
-      WHERE user_id = ?
+  amount_minor,
+  direction,
+  currency
+FROM ledger_entries
+WHERE user_id = ?
     `).all(req.user.sub);
 
     const balances = {};
 
     for (const entry of entries) {
       const currency = entry.currency || 'XAF';
-      balances[currency] =
-        (balances[currency] || 0) + Number(entry.amount || 0);
+      const amount = Number(entry.amount_minor || 0);
+const signedAmount = entry.direction === 'DEBIT' ? -amount : amount;
+
+balances[currency] =
+  (balances[currency] || 0) + signedAmount;
     }
 
     res.json({
