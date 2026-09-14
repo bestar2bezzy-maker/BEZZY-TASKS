@@ -59,11 +59,17 @@ router.post('/auth/register', async (req, res, next) => {
 
     const passwordHash = await bcrypt.hash(password, 12);
 
-    const result = db.prepare(`
-      INSERT INTO users (
-        phone,
-        country_code,
-        password_hash
+    const userId = crypto.randomUUID();
+
+db.prepare(`
+  INSERT INTO users (
+    id,
+    phone,
+    country_code,
+    password_hash
+  )
+  VALUES (?, ?, ?, ?)
+`).run(userId, phone, country_code, passwordHash); 
       )
       VALUES (?, ?, ?)
     `).run(phone, country_code, passwordHash);
