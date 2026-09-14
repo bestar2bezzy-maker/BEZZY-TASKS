@@ -74,11 +74,13 @@ db.prepare(`
       VALUES (?, ?, ?)
     `).run(phone, country_code, passwordHash);
 
-    const user = db
-      .prepare(`
-        SELECT id, phone, country_code, role
-        FROM users
-        WHERE id = ?
+   const user = db
+  .prepare(`
+    SELECT id, phone, country_code, role
+    FROM users
+    WHERE id = ?
+  `)
+  .get(userId); 
       `)
       .get(result.lastInsertRowid);
 
