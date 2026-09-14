@@ -84,11 +84,7 @@ router.post('/:id/start', (req, res, next) => {
       LIMIT 1
     `).get(req.user.sub, req.params.id);
 
-    if (existing && ['pending', 'approved'].includes(existing.status)) {
-      return res.json({
-        completion: existing
-      });
-    }
+    if (existing && ['PENDING', 'APPROVED'].includes(existing.status)) {
 
     const result = db.prepare(`
       const completionId = crypto.randomUUID();
@@ -111,10 +107,10 @@ db.prepare(`
     `).run(req.user.sub, req.params.id);
 
     const completion = db.prepare(`
-      SELECT *
-      FROM task_completions
-      WHERE id = ?
-    `).get(result.lastInsertRowid);
+  SELECT *
+  FROM task_completions
+  WHERE id = ?
+`).get(completionId);
 
     res.status(201).json({ completion });
   } catch (error) {
