@@ -46,15 +46,16 @@ router.get('/ledger', (req, res, next) => {
     const db = getDb();
 
     const entries = db.prepare(`
-      SELECT
-        id,
-        type,
-        amount,
-        currency,
-        reference,
-        idempotency_key,
-        created_at
-      FROM ledger_entries
+     SELECT
+  id,
+  entry_type AS type,
+  amount_minor AS amount,
+  currency,
+  reference_type,
+  reference_id,
+  idempotency_key,
+  created_at
+FROM ledger_entries 
       WHERE user_id = ?
       ORDER BY id DESC
     `).all(req.user.sub);
