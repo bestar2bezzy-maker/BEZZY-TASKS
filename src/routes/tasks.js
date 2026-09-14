@@ -20,7 +20,7 @@ router.get('/', (req, res, next) => {
         status,
         created_at
       FROM tasks
-      WHERE status = 'active'
+      WHERE status = 'ACTIVE'
       ORDER BY id DESC
     `).all();
 
@@ -70,7 +70,7 @@ router.post('/:id/start', (req, res, next) => {
       WHERE id = ?
     `).get(req.params.id);
 
-    if (!task || task.status !== 'active') {
+    if (!task || task.status !== 'ACTIVE') {
       return res.status(404).json({
         error: 'TASK_NOT_AVAILABLE',
         message: 'Task is not available'
