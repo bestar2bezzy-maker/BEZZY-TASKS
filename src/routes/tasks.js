@@ -15,7 +15,7 @@ router.get('/', (req, res, next) => {
         id,
         title,
         description,
-        reward_amount,
+        reward_minor,
         currency,
         status,
         created_at
@@ -39,7 +39,7 @@ router.get('/:id', (req, res, next) => {
         id,
         title,
         description,
-        reward_amount,
+       reward_minor,
         currency,
         status,
         created_at
