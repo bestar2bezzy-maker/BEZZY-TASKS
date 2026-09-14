@@ -1,9 +1,8 @@
 const express = require('express');
 const { getDb } = require('../config/database');
 const { requireAuth, requireRole } = require('../middleware/auth');
-
 const router = express.Router();
-
+const crypto = require('crypto');
 router.use(requireAuth);
 
 router.get('/', (req, res, next) => {
@@ -92,10 +91,21 @@ router.post('/:id/start', (req, res, next) => {
     }
 
     const result = db.prepare(`
-      INSERT INTO task_completions (
-        user_id,
-        task_id,
-        status
+      const completionId = crypto.randomUUID();
+
+db.prepare(`
+  INSERT INTO task_completions (
+    id,
+    user_id,
+    task_id,
+    status
+  )
+  VALUES (?, ?, ?, 'STARTED')
+`).run(
+  completionId,
+  req.user.sub,
+  req.params.id
+);
       )
       VALUES (?, ?, 'started')
     `).run(req.user.sub, req.params.id);
