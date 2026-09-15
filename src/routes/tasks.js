@@ -1,8 +1,10 @@
 const express = require('express');
+const crypto = require('crypto');
 const { getDb } = require('../config/database');
 const { requireAuth, requireRole } = require('../middleware/auth');
+
 const router = express.Router();
-const crypto = require('crypto');
+
 router.use(requireAuth);
 
 router.get('/', (req, res, next) => {
@@ -20,7 +22,7 @@ router.get('/', (req, res, next) => {
         created_at
       FROM tasks
       WHERE status = 'ACTIVE'
-      ORDER BY id DESC
+      ORDER BY created_at DESC
     `).all();
 
     res.json({ tasks });
@@ -38,7 +40,7 @@ router.get('/:id', (req, res, next) => {
         id,
         title,
         description,
-       reward_minor,
+        reward_minor,
         currency,
         status,
         created_at
@@ -80,31 +82,62 @@ router.post('/:id/start', (req, res, next) => {
       SELECT id, status
       FROM task_completions
       WHERE user_id = ? AND task_id = ?
-      ORDER BY id DESC
       LIMIT 1
     `).get(req.user.sub, req.params.id);
 
-    if (existing && ['PENDING', 'APPROVED', 'STARTED'].includes(existing.status)) {
+    if (
+      existing &&
+      ['PENDING', 'APPROVED', 'STARTED'].includes(existing.status)
+    ) {
+      const completion = db.prepare(`
+        SELECT *
+        FROM task_completions
+        WHERE id = ?
+      `).get(existing.id);
 
-    const result = db.prepare(`
-      const completionId = crypto.randomUUID();
+      return res.json({ completion });
+    }
 
-db.prepare(`
-  INSERT INTO task_completions (
-    id,
-    user_id,
-    task_id,
-    status
-  )
-  VALUES (?, ?, ?, 'STARTED')
-`).run(
-  completionId,
-  req.user.sub,
-  req.params.id
-);
+    if (existing && existing.status === 'REJECTED') {
+      db.prepare(`
+        UPDATE task_completions
+        SET status = 'STARTED',
+            evidence_json = NULL,
+            submitted_at = CURRENT_TIMESTAMP,
+            reviewed_at = NULL
+        WHERE id = ?
+      `).run(existing.id);
+
+      const restarted = db.prepare(`
+        SELECT *
+        FROM task_completions
+        WHERE id = ?
+      `).get(existing.id);
+
+      return res.json({ completion: restarted });
+    }
+
+    const completionId = crypto.randomUUID();
+
+    db.prepare(`
+      INSERT INTO task_completions (
+        id,
+        user_id,
+        task_id,
+        status
       )
-      VALUES (?, ?, 'started')
-     dget(completionId);
+      VALUES (?, ?, ?, 'STARTED')
+    `).run(
+      completionId,
+      req.user.sub,
+      req.params.id
+    );
+
+    const completion = db.prepare(`
+      SELECT *
+      FROM task_completions
+      WHERE id = ?
+    `).get(completionId);
 
     res.status(201).json({ completion });
   } catch (error) {
@@ -121,7 +154,6 @@ router.post('/:id/submit', (req, res, next) => {
       SELECT *
       FROM task_completions
       WHERE user_id = ? AND task_id = ?
-      ORDER BY id DESC
       LIMIT 1
     `).get(req.user.sub, req.params.id);
 
@@ -132,12 +164,17 @@ router.post('/:id/submit', (req, res, next) => {
       });
     }
 
-    if (!['started', 'rejected'].includes(completion.status)) {
+    if (!['STARTED', 'REJECTED'].includes(completion.status)) {
       return res.status(409).json({
         error: 'INVALID_COMPLETION_STATE',
         message: 'This completion cannot be submitted'
       });
     }
+
+    const evidenceJson =
+      typeof evidence === 'string'
+        ? evidence.slice(0, 20000)
+        : JSON.stringify(evidence).slice(0, 20000);
 
     db.prepare(`
       UPDATE task_completions
@@ -146,9 +183,7 @@ router.post('/:id/submit', (req, res, next) => {
           submitted_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(
-      typeof evidence === 'string'
-        ? evidence.slice(0, 20000)
-        : JSON.stringify(evidence).slice(0, 20000),
+      evidenceJson,
       completion.id
     );
 
@@ -182,7 +217,7 @@ router.get('/history/me', (req, res, next) => {
       FROM task_completions tc
       JOIN tasks t ON t.id = tc.task_id
       WHERE tc.user_id = ?
-      ORDER BY tc.id DESC
+      ORDER BY tc.submitted_at DESC
     `).all(req.user.sub);
 
     res.json({ history });
@@ -197,9 +232,13 @@ router.post(
   (req, res, next) => {
     try {
       const db = getDb();
-      const { completion_id, decision, note = null } = req.body || {};
+      const { completion_id, decision } = req.body || {};
+      const normalizedDecision = String(decision || '').toUpperCase();
 
-      if (!completion_id || !['APPROVED', 'REJECTED'].includes(decision)) {
+      if (
+        !completion_id ||
+        !['APPROVED', 'REJECTED'].includes(normalizedDecision)
+      ) {
         return res.status(400).json({
           error: 'INVALID_REVIEW',
           message: 'completion_id and a valid decision are required'
@@ -222,7 +261,7 @@ router.post(
         });
       }
 
-      if (completion.status !== 'pending') {
+      if (completion.status !== 'PENDING') {
         return res.status(409).json({
           error: 'ALREADY_REVIEWED'
         });
@@ -232,16 +271,14 @@ router.post(
         db.prepare(`
           UPDATE task_completions
           SET status = ?,
-    reviewed_at = CURRENT_TIMESTAMP
+              reviewed_at = CURRENT_TIMESTAMP
           WHERE id = ?
         `).run(
-  decision,
-  note,
-  req.user.sub,
-  completion_id
-);
+          normalizedDecision,
+          completion_id
+        );
 
-        if (decision === 'approved') {
+        if (normalizedDecision === 'APPROVED') {
           const idempotencyKey = `task-reward:${completion_id}`;
 
           const existingLedger = db.prepare(`
@@ -253,21 +290,21 @@ router.post(
           if (!existingLedger) {
             db.prepare(`
               INSERT INTO ledger_entries (
-  user_id,
-  entry_type,
-  direction,
-  amount_minor,
-  currency,
-  reference_type,
-  reference_id,
-  idempotency_key
-)
-VALUES (?, 'TASK_REWARD', 'CREDIT', ?, ?, 'TASK', ?, ?)
+                user_id,
+                entry_type,
+                direction,
+                amount_minor,
+                currency,
+                reference_type,
+                reference_id,
+                idempotency_key
+              )
+              VALUES (?, 'TASK_REWARD', 'CREDIT', ?, ?, 'TASK', ?, ?)
             `).run(
               completion.user_id,
               completion.reward_minor,
               completion.currency,
-              `task:${completion.task_id}`,
+              completion.task_id,
               idempotencyKey
             );
           }
@@ -279,7 +316,7 @@ VALUES (?, 'TASK_REWARD', 'CREDIT', ?, ?, 'TASK', ?, ?)
       res.json({
         status: 'ok',
         completion_id,
-        decision
+        decision: normalizedDecision
       });
     } catch (error) {
       next(error);
