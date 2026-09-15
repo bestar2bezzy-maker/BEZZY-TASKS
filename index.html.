@@ -17,7 +17,7 @@ header{position:sticky;top:0;z-index:5;background:rgba(5,13,9,.88);backdrop-filt
 <input id="countrySearch" type="search" placeholder="🔍 Rechercher votre pays..." autocomplete="off">
 <select id="country" required size="1"></select>
 <div id="countryCount" class="small muted"></div>
-</div> class="field"><label>Numéro de téléphone</label><input id="phone" required placeholder="06..."></div><div class="field"><label>Mot de passe</label><input id="password" type="password" minlength="8" required></div><button class="primary" style="width:100%">Continuer</button></form>
+</div><div class="field"><label>Numéro de téléphone</label><input id="phone" required placeholder="06..."></div><div class="field"><label>Mot de passe</label><input id="password" type="password" minlength="8" required></div><button class="primary" style="width:100%">Continuer</button></form>
 <p id="authMsg" class="muted small"></p></section>
 <section id="appView" class="hidden">
 <div class="hero"><div class="card"><p class="gold">TABLEAU DE BORD</p><h1>Gagnez en réalisant des <span class="gold">missions utiles.</span></h1><p class="muted">Les campagnes sont fournies par des partenaires. Un clic ne donne jamais automatiquement droit à une récompense.</p></div>
@@ -114,13 +114,13 @@ function renderCountries(countries){
 
   $("countryCount").textContent =
     `${countries.length} pays disponible${countries.length > 1 ? "s" : ""}`;
-  
+  }
 async function load(){if(!token)return;try{let me=await api("/api/me");$("authView").classList.add("hidden");$("appView").classList.remove("hidden");$("balance").textContent=me.balance.toLocaleString("fr-FR");$("earned").textContent=me.total_earned.toLocaleString("fr-FR");$("ref").textContent=me.referral_code;$("phoneShow").textContent=me.phone; $("headerActions").innerHTML=`<button class="secondary" onclick="logout()">Déconnexion</button>`;if(me.role==="admin")$("headerActions").innerHTML+=` <a href="/admin" class="secondary" style="text-decoration:none">Admin</a>`;loadOffers()}catch(e){logout()}}
 async function loadOffers(){let rows=await api("/api/offers");$("offers").innerHTML=rows.length?rows.map(o=>`<article class="offer"><div class="small gold">${o.type==="game"?"JEU":"APPLICATION"}</div><h3>${esc(o.title)}</h3><p class="muted">${esc(o.description)}</p><div class="reward">+${Number(o.reward).toLocaleString("fr-FR")} FCFA</div><div class="actions"><button class="primary" onclick="startOffer(${o.id})">Tester l’offre ↗</button>${o.completion_status?`<span class="secondary">${esc(o.completion_status)}</span>`:""}</div><p class="small muted">Validation : partenaire/campagne. Aucun gain sur simple clic.</p></article>`).join(""):`<div class="card">Aucune campagne active pour le moment.</div>`}
 async function startOffer(id){try{let d=await api("/api/offers/"+id+"/start",{method:"POST"});window.open(d.campaign_url,"_blank","noopener");toast("Campagne ouverte. Attendez sa validation réelle pour recevoir le gain.")}catch(e){toast(e.message)}}
 async function loadHistory(){let rows=await api("/api/history");$("history").innerHTML=rows.length?rows.map(x=>`<div class="row"><span>${esc(x.label)}<br><small class="muted">${esc(x.created_at)}</small></span><b class="gold">+${Number(x.amount).toLocaleString("fr-FR")} FCFA</b></div>`).join(""):`<div class="card">Aucun mouvement.</div>`}
 document.querySelectorAll(".tab[data-tab]").forEach(b=>b.onclick=()=>{document.querySelectorAll(".tab[data-tab]").forEach(x=>x.classList.remove("active"));b.classList.add("active");let t=b.dataset.tab;$("offersPane").classList.toggle("hidden",t!=="offers");$("historyPane").classList.toggle("hidden",t!=="history");$("withdrawPane").classList.toggle("hidden",t!=="withdraw");if(t==="history")loadHistory();if(t==="withdraw"){loadPayoutMethods();loadWithdrawals()}});
-$("authForm").onsubmit=async e=>{e.preventDefault();try{let d=await api("/api/auth/"+(authMode==="login"?"login":"register"),{method:"POST",body:JSON.stringify({phone:$("phone").value,password:$("password").value,country_code:$("country").value})});token=d.token;localStorage.setItem("bz_token",token);load()}catch(x){$("authMsg").textContent=x.message}};
+$("authForm").onsubmit=async e=>{e.preventDefault();try{let d=await api("/api/auth/"+(authMode==="login"?"login":"register"),{method:"POST",body:JSON.stringify({phone:$("phone").value,password:$("password").value,country_code:$("country").value})});token=d.access_token;,localStorage.setItem("bz_token",token);load()}catch(x){$("authMsg").textContent=x.message}};
 function logout(){localStorage.removeItem("bz_token");token=null;location.reload()}
 
 async function loadPayoutMethods(){try{let d=await api("/api/payout-methods");let rows=d.methods||[];$("wmethod").innerHTML=rows.map(x=>`<option value="${x.id}">${esc(x.name)} · min ${Number(x.min_amount).toLocaleString("fr-FR")} ${esc(d.country.currency)}</option>`).join("");}catch(e){toast(e.message)}}
