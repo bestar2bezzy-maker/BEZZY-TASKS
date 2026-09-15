@@ -2,30 +2,153 @@ const express = require('express');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const { getDb } = require('../config/database');
-const { signAccessToken, requireAuth, requireRole } = require('../middleware/auth');
+const {
+  signAccessToken,
+  requireAuth,
+  requireRole
+} = require('../middleware/auth');
 
 const router = express.Router();
 
-router.get('/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    version: '33.2.7',
-    service: 'bezzy-tasks'
-  });
-});
+/*
+ * ============================================================
+ * V33.2.8 - AUTHENTIFICATION EMAIL + TELEPHONE
+ * ============================================================
+ */
 
-router.get('/version', (req, res) => {
-  res.json({
-    version: '33.2.7',
-    status: 'stable',
-    baseline: 'V1-V32',
-    current: 'V33.2.7'
-  });
-});
+const DIAL_CODES = {
+  DZ: '+213',
+  AO: '+244',
+  BJ: '+229',
+  BW: '+267',
+  BF: '+226',
+  BI: '+257',
+  CV: '+238',
+  CM: '+237',
+  CF: '+236',
+  TD: '+235',
+  KM: '+269',
+  CG: '+242',
+  CD: '+243',
+  CI: '+225',
+  DJ: '+253',
+  EG: '+20',
+  GQ: '+240',
+  ER: '+291',
+  SZ: '+268',
+  ET: '+251',
+  GA: '+241',
+  GM: '+220',
+  GH: '+233',
+  GN: '+224',
+  GW: '+245',
+  KE: '+254',
+  LS: '+266',
+  LR: '+231',
+  LY: '+218',
+  MG: '+261',
+  MW: '+265',
+  ML: '+223',
+  MR: '+222',
+  MU: '+230',
+  MA: '+212',
+  MZ: '+258',
+  NA: '+264',
+  NE: '+227',
+  NG: '+234',
+  RW: '+250',
+  ST: '+239',
+  SN: '+221',
+  SC: '+248',
+  SL: '+232',
+  SO: '+252',
+  ZA: '+27',
+  SS: '+211',
+  SD: '+249',
+  TZ: '+255',
+  TG: '+228',
+  TN: '+216',
+  UG: '+256',
+  ZM: '+260',
+  ZW: '+263',
 
-router.get('/countries', (req, res) => {
-  res.json([
-    // 🌍 AFRIQUE
+  BE: '+32',
+  FR: '+33',
+  DE: '+49',
+  IE: '+353',
+  IT: '+39',
+  LU: '+352',
+  NL: '+31',
+  PT: '+351',
+  ES: '+34',
+
+  US: '+1',
+  CA: '+1',
+  BR: '+55',
+  MX: '+52',
+
+  CN: '+86',
+  JP: '+81',
+  IN: '+91',
+  KR: '+82',
+
+  AE: '+971',
+  SA: '+966',
+  QA: '+974',
+  IL: '+972',
+
+  AU: '+61',
+  NZ: '+64'
+};
+
+function normalizeEmail(email) {
+  if (!email) return null;
+
+  const value = String(email).trim().toLowerCase();
+
+  return value || null;
+}
+
+function normalizePhone(phone) {
+  if (!phone) return null;
+
+  return String(phone)
+    .trim()
+    .replace(/[()\s.-]/g, '');
+}
+
+function buildInternationalPhone(phone, countryCode) {
+  const normalized = normalizePhone(phone);
+
+  if (!normalized) return null;
+
+  /*
+   * Si l'utilisateur fournit déjà un numéro international,
+   * on le conserve.
+   */
+  if (normalized.startsWith('+')) {
+    return normalized;
+  }
+
+  const dialCode = DIAL_CODES[String(countryCode || 'CG').toUpperCase()];
+
+  if (!dialCode) {
+    return normalized;
+  }
+
+  /*
+   * L'utilisateur saisit uniquement son numéro national.
+   * Exemple Congo :
+   * 06 123 45 67 -> +242061234567
+   *
+   * On ne force PAS un préfixe "06".
+   */
+  return `${dialCode}${normalized}`;
+}
+
+function getCountryList() {
+  return [
+    // AFRIQUE
     { code: 'DZ', currency: 'DZD', name: 'Algérie', region: 'Afrique' },
     { code: 'AO', currency: 'AOA', name: 'Angola', region: 'Afrique' },
     { code: 'BJ', currency: 'XOF', name: 'Bénin', region: 'Afrique' },
@@ -81,7 +204,7 @@ router.get('/countries', (req, res) => {
     { code: 'ZM', currency: 'ZMW', name: 'Zambie', region: 'Afrique' },
     { code: 'ZW', currency: 'ZWG', name: 'Zimbabwe', region: 'Afrique' },
 
-    // 🇪🇺 EUROPE
+    // EUROPE
     { code: 'BE', currency: 'EUR', name: 'Belgique', region: 'Europe' },
     { code: 'FR', currency: 'EUR', name: 'France', region: 'Europe' },
     { code: 'DE', currency: 'EUR', name: 'Allemagne', region: 'Europe' },
@@ -92,132 +215,339 @@ router.get('/countries', (req, res) => {
     { code: 'PT', currency: 'EUR', name: 'Portugal', region: 'Europe' },
     { code: 'ES', currency: 'EUR', name: 'Espagne', region: 'Europe' },
 
-    // 🌎 AMÉRIQUES
+    // AMERIQUES
     { code: 'US', currency: 'USD', name: 'États-Unis', region: 'Amériques' },
     { code: 'CA', currency: 'CAD', name: 'Canada', region: 'Amériques' },
     { code: 'BR', currency: 'BRL', name: 'Brésil', region: 'Amériques' },
     { code: 'MX', currency: 'MXN', name: 'Mexique', region: 'Amériques' },
 
-    // 🌏 ASIE
+    // ASIE
     { code: 'CN', currency: 'CNY', name: 'Chine', region: 'Asie' },
     { code: 'JP', currency: 'JPY', name: 'Japon', region: 'Asie' },
     { code: 'IN', currency: 'INR', name: 'Inde', region: 'Asie' },
     { code: 'KR', currency: 'KRW', name: 'Corée du Sud', region: 'Asie' },
 
-    // 🕌 MOYEN-ORIENT
+    // MOYEN-ORIENT
     { code: 'AE', currency: 'AED', name: 'Émirats arabes unis', region: 'Moyen-Orient' },
     { code: 'SA', currency: 'SAR', name: 'Arabie saoudite', region: 'Moyen-Orient' },
     { code: 'QA', currency: 'QAR', name: 'Qatar', region: 'Moyen-Orient' },
     { code: 'IL', currency: 'ILS', name: 'Israël', region: 'Moyen-Orient' },
 
-    // 🌊 OCÉANIE
+    // OCEANIE
     { code: 'AU', currency: 'AUD', name: 'Australie', region: 'Océanie' },
     { code: 'NZ', currency: 'NZD', name: 'Nouvelle-Zélande', region: 'Océanie' }
-  ]);
+  ].map(country => ({
+    ...country,
+    dial_code: DIAL_CODES[country.code] || null
+  }));
+}
+
+
+/*
+ * ============================================================
+ * SYSTEM
+ * ============================================================
+ */
+
+router.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    version: '33.2.8',
+    service: 'bezzy-tasks'
+  });
 });
+
+router.get('/version', (req, res) => {
+  res.json({
+    version: '33.2.8',
+    status: 'stable',
+    baseline: 'V1-V32',
+    current: 'V33.2.8'
+  });
+});
+
+
+/*
+ * ============================================================
+ * COUNTRIES
+ * ============================================================
+ */
+
+router.get('/countries', (req, res) => {
+  res.json(getCountryList());
+});
+
+
+/*
+ * ============================================================
+ * AUTH REGISTER
+ * ============================================================
+ */
 
 router.post('/auth/register', async (req, res, next) => {
   try {
-    const { phone, country_code = 'CG', password } = req.body || {};
+    const {
+      email,
+      phone,
+      country_code = 'CG',
+      password
+    } = req.body || {};
 
-    if (!phone || !password || password.length < 6) {
+    const normalizedEmail = normalizeEmail(email);
+    const normalizedPhone = normalizePhone(phone);
+    const countryCode = String(country_code || 'CG').toUpperCase();
+
+    if (!password || String(password).length < 8) {
       return res.status(400).json({
-        error: 'INVALID_INPUT',
-        message: 'Phone and password are required'
+        error: 'INVALID_PASSWORD',
+        message: 'Password must contain at least 8 characters'
+      });
+    }
+
+    if (!normalizedEmail && !normalizedPhone) {
+      return res.status(400).json({
+        error: 'CONTACT_REQUIRED',
+        message: 'Email or phone number is required'
       });
     }
 
     const db = getDb();
 
-    const existing = db
-      .prepare('SELECT id FROM users WHERE phone = ?')
-      .get(phone);
+    if (normalizedEmail) {
+      const existingEmail = db
+        .prepare('SELECT id FROM users WHERE LOWER(email) = LOWER(?)')
+        .get(normalizedEmail);
 
-    if (existing) {
-      return res.status(409).json({
-        error: 'PHONE_EXISTS',
-        message: 'Phone number already registered'
-      });
+      if (existingEmail) {
+        return res.status(409).json({
+          error: 'EMAIL_EXISTS',
+          message: 'Email address already registered'
+        });
+      }
     }
 
-    const passwordHash = await bcrypt.hash(password, 12);
+    let internationalPhone = null;
+
+    if (normalizedPhone) {
+      internationalPhone = buildInternationalPhone(
+        normalizedPhone,
+        countryCode
+      );
+
+      /*
+       * Compatibilité avec les anciens comptes :
+       * on vérifie à la fois le numéro fourni et le numéro
+       * internationalisé.
+       */
+      const existingPhone = db
+        .prepare(`
+          SELECT id
+          FROM users
+          WHERE phone = ?
+             OR phone = ?
+        `)
+        .get(normalizedPhone, internationalPhone);
+
+      if (existingPhone) {
+        return res.status(409).json({
+          error: 'PHONE_EXISTS',
+          message: 'Phone number already registered'
+        });
+      }
+    }
+
+    const passwordHash = await bcrypt.hash(
+      String(password),
+      12
+    );
+
     const userId = crypto.randomUUID();
 
     db.prepare(`
       INSERT INTO users (
         id,
+        email,
         phone,
         country_code,
         password_hash
       )
-      VALUES (?, ?, ?, ?)
-    `).run(userId, phone, country_code, passwordHash);
+      VALUES (?, ?, ?, ?, ?)
+    `).run(
+      userId,
+      normalizedEmail,
+      internationalPhone,
+      countryCode,
+      passwordHash
+    );
 
     const user = db
       .prepare(`
-        SELECT id, phone, country_code, referral_code, role, created_at
+        SELECT
+          id,
+          email,
+          phone,
+          country_code,
+          referral_code,
+          role,
+          created_at
         FROM users
         WHERE id = ?
       `)
       .get(userId);
 
-    const token = signAccessToken(user);
+    const accessToken = signAccessToken(user);
 
     res.status(201).json({
       user,
-      access_token: token
+      access_token: accessToken
     });
   } catch (error) {
     next(error);
   }
 });
 
+
+/*
+ * ============================================================
+ * AUTH LOGIN
+ * ============================================================
+ */
+
 router.post('/auth/login', async (req, res, next) => {
   try {
-    const { phone, password } = req.body || {};
+    const {
+      identifier,
+      email,
+      phone,
+      password
+    } = req.body || {};
 
-    if (!phone || !password) {
+    const loginIdentifier =
+      identifier ||
+      email ||
+      phone;
+
+    if (!loginIdentifier || !password) {
       return res.status(400).json({
         error: 'INVALID_INPUT',
-        message: 'Phone and password are required'
+        message: 'Email/phone and password are required'
       });
     }
 
     const db = getDb();
 
-    const user = db
-      .prepare('SELECT * FROM users WHERE phone = ?')
-      .get(phone);
+    let user = null;
 
-    if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+    const identifierValue = String(loginIdentifier).trim();
+
+    if (identifierValue.includes('@')) {
+      const normalizedEmail = normalizeEmail(identifierValue);
+
+      user = db
+        .prepare(`
+          SELECT *
+          FROM users
+          WHERE LOWER(email) = LOWER(?)
+        `)
+        .get(normalizedEmail);
+    } else {
+      const normalizedPhone = normalizePhone(identifierValue);
+
+      user = db
+        .prepare(`
+          SELECT *
+          FROM users
+          WHERE phone = ?
+        `)
+        .get(normalizedPhone);
+
+      /*
+       * Si l'utilisateur saisit un numéro national,
+       * on tente également une recherche internationale
+       * avec le pays du compte.
+       */
+      if (!user && normalizedPhone) {
+        const users = db
+          .prepare(`
+            SELECT *
+            FROM users
+            WHERE phone IS NOT NULL
+          `)
+          .all();
+
+        for (const candidate of users) {
+          const candidateInternational = buildInternationalPhone(
+            normalizedPhone,
+            candidate.country_code
+          );
+
+          if (
+            candidate.phone === candidateInternational
+          ) {
+            user = candidate;
+            break;
+          }
+        }
+      }
+    }
+
+    if (
+      !user ||
+      !(await bcrypt.compare(
+        String(password),
+        user.password_hash
+      ))
+    ) {
       return res.status(401).json({
         error: 'INVALID_CREDENTIALS',
-        message: 'Invalid phone or password'
+        message: 'Invalid email/phone or password'
       });
     }
 
-    const token = signAccessToken(user);
+    if (user.status && user.status !== 'ACTIVE') {
+      return res.status(403).json({
+        error: 'ACCOUNT_INACTIVE',
+        message: 'Account is not active'
+      });
+    }
+
+    const accessToken = signAccessToken(user);
 
     res.json({
       user: {
         id: user.id,
-        phone: user.phone,
+        email: user.email || null,
+        phone: user.phone || null,
         country_code: user.country_code,
         role: user.role
       },
-      access_token: token
+      access_token: accessToken
     });
   } catch (error) {
     next(error);
   }
 });
+
+
+/*
+ * ============================================================
+ * CURRENT USER
+ * ============================================================
+ */
 
 router.get('/me', requireAuth, (req, res) => {
   const db = getDb();
 
   const user = db
     .prepare(`
-      SELECT id, phone, country_code, referral_code, role, created_at
+      SELECT
+        id,
+        email,
+        phone,
+        country_code,
+        referral_code,
+        role,
+        created_at
       FROM users
       WHERE id = ?
     `)
@@ -231,7 +561,10 @@ router.get('/me', requireAuth, (req, res) => {
 
   const balanceRows = db
     .prepare(`
-      SELECT currency, direction, amount_minor
+      SELECT
+        currency,
+        direction,
+        amount_minor
       FROM ledger_entries
       WHERE user_id = ?
     `)
@@ -251,7 +584,9 @@ router.get('/me', requireAuth, (req, res) => {
     if (entry.direction === 'CREDIT') {
       balances[currency] += amount;
       totalEarned += amount;
-    } else if (entry.direction === 'DEBIT') {
+    }
+
+    if (entry.direction === 'DEBIT') {
       balances[currency] -= amount;
     }
   }
@@ -274,9 +609,16 @@ router.get('/me', requireAuth, (req, res) => {
     balances
   });
 });
-  const db = getDb();
 
-  router.use('/tasks', require('./tasks'));
+
+/*
+ * ============================================================
+ * TASKS / WALLET / ADMIN
+ * ============================================================
+ */
+
+router.use('/tasks', require('./tasks'));
+
 router.use('/wallet', require('./wallet'));
 
 router.use(
