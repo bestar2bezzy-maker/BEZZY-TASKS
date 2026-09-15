@@ -276,27 +276,7 @@ router.get('/me', requireAuth, (req, res) => {
 });
   const db = getDb();
 
-  const user = db
-    .prepare(`
-      SELECT id, phone, country_code, referral_code, role, created_at
-      FROM users
-      WHERE id = ?
-    `)
-    .get(req.user.sub);
-
-  if (!user) {
-    return res.status(404).json({
-      error: 'USER_NOT_FOUND'
-    });
-  }
-
-  res.json({ user });
-});
-
-  const db = getDb();
-});
-
-router.use('/tasks', require('./tasks'));
+  router.use('/tasks', require('./tasks'));
 router.use('/wallet', require('./wallet'));
 
 router.use(
@@ -310,5 +290,6 @@ router.use(
     });
   }
 );
+
 
 module.exports = router;
