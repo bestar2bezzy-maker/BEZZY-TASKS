@@ -293,7 +293,6 @@ router.get('/me', requireAuth, (req, res) => {
   res.json({ user });
 });
 
-router.get('/me', requireAuth, (req, res) => {
   const db = getDb();
 });
 
