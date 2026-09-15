@@ -115,7 +115,6 @@ router.get('/countries', (req, res) => {
     { code: 'NZ', currency: 'NZD', name: 'Nouvelle-Zélande', region: 'Océanie' }
   ]);
 });
-});
 
 router.post('/auth/register', async (req, res, next) => {
   try {
