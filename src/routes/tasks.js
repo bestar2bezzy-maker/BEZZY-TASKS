@@ -237,11 +237,11 @@ router.post(
               reviewed_by = ?
           WHERE id = ?
         `).run(
-          decision,
-          note,
-          req.user.sub,
-          completion_id
-        );
+  decision,
+  note,
+  req.user.sub,
+  completion_id
+);
 
         if (decision === 'approved') {
           const idempotencyKey = `task-reward:${completion_id}`;
