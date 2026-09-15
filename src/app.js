@@ -14,7 +14,6 @@ app.use(helmet({ contentSecurityPolicy:false, hsts: env.NODE_ENV === 'production
 app.use(cors({ origin: env.CORS_ORIGIN === '*' ? true : env.CORS_ORIGIN, credentials: true }));
 app.use(express.json({ limit:'1mb', verify:(req, res, buf)=>{ req.rawBody = Buffer.from(buf); } }));
 app.use('/api', rateLimit({windowMs:60000,max:180}), api);
-app.get('/', (req, res) => {
 app.use(express.static(require('path').join(__dirname,'../public')));
 const {notFound,errorHandler}=require('./middleware/errorHandler');
 app.use(notFound); app.use(errorHandler);
