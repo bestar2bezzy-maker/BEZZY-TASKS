@@ -12,7 +12,12 @@ header{position:sticky;top:0;z-index:5;background:rgba(5,13,9,.88);backdrop-filt
 <section id="authView" class="auth card">
 <h2>Bienvenue sur Bezzy Tasks</h2><p class="muted">Une plateforme de tâches et d'offres rémunérées, avec validation réelle des campagnes partenaires.</p>
 <div class="tabs"><button class="tab active" onclick="showAuth('login',this)">Connexion</button><button class="tab" onclick="showAuth('register',this)">Créer un compte</button></div>
-<form id="authForm"><div class="field"><label>Pays</label><select id="country" required></select></div><div class="field"><label>Numéro de téléphone</label><input id="phone" required placeholder="06..."></div><div class="field"><label>Mot de passe</label><input id="password" type="password" minlength="8" required></div><button class="primary" style="width:100%">Continuer</button></form>
+<form id="authForm"><<div class="field">
+<label>Pays</label>
+<input id="countrySearch" type="search" placeholder="🔍 Rechercher votre pays..." autocomplete="off">
+<select id="country" required size="1"></select>
+<div id="countryCount" class="small muted"></div>
+</div> class="field"><label>Numéro de téléphone</label><input id="phone" required placeholder="06..."></div><div class="field"><label>Mot de passe</label><input id="password" type="password" minlength="8" required></div><button class="primary" style="width:100%">Continuer</button></form>
 <p id="authMsg" class="muted small"></p></section>
 <section id="appView" class="hidden">
 <div class="hero"><div class="card"><p class="gold">TABLEAU DE BORD</p><h1>Gagnez en réalisant des <span class="gold">missions utiles.</span></h1><p class="muted">Les campagnes sont fournies par des partenaires. Un clic ne donne jamais automatiquement droit à une récompense.</p></div>
