@@ -7,4 +7,4 @@
   "jsonwebtoken": "^9.0.2",
   "bcryptjs": "^3.0.2",
   "dotenv": "^16.4.7"
-}
+}}
