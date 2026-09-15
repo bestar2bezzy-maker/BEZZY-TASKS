@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const { getDb } = require('../config/database');
 const { signAccessToken, requireAuth, requireRole } = require('../middleware/auth');
@@ -58,31 +59,25 @@ router.post('/auth/register', async (req, res, next) => {
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
-
     const userId = crypto.randomUUID();
 
-db.prepare(`
-  INSERT INTO users (
-    id,
-    phone,
-    country_code,
-    password_hash
-  )
-  VALUES (?, ?, ?, ?)
-`).run(userId, phone, country_code, passwordHash); 
+    db.prepare(`
+      INSERT INTO users (
+        id,
+        phone,
+        country_code,
+        password_hash
       )
-      VALUES (?, ?, ?)
-    `).run(phone, country_code, passwordHash);
+      VALUES (?, ?, ?, ?)
+    `).run(userId, phone, country_code, passwordHash);
 
-   const user = db
-  .prepare(`
-    SELECT id, phone, country_code, role
-    FROM users
-    WHERE id = ?
-  `)
-  .get(userId); 
+    const user = db
+      .prepare(`
+        SELECT id, phone, country_code, referral_code, role, created_at
+        FROM users
+        WHERE id = ?
       `)
-      .get(result.lastInsertRowid);
+      .get(userId);
 
     const token = signAccessToken(user);
 
@@ -191,4 +186,3 @@ router.use(
 );
 
 module.exports = router;
-const crypto = require('crypto');
