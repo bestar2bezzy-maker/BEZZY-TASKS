@@ -199,7 +199,7 @@ router.post(
       const db = getDb();
       const { completion_id, decision, note = null } = req.body || {};
 
-      if (!completion_id || !['approved', 'rejected'].includes(decision)) {
+      if (!completion_id || !['APPROVED', 'REJECTED'].includes(decision)) {
         return res.status(400).json({
           error: 'INVALID_REVIEW',
           message: 'completion_id and a valid decision are required'
@@ -255,17 +255,19 @@ router.post(
           if (!existingLedger) {
             db.prepare(`
               INSERT INTO ledger_entries (
-                user_id,
-                type,
-                amount,
-                currency,
-                reference,
-                idempotency_key
-              )
-              VALUES (?, 'task_reward', ?, ?, ?, ?)
+  user_id,
+  entry_type,
+  direction,
+  amount_minor,
+  currency,
+  reference_type,
+  reference_id,
+  idempotency_key
+)
+VALUES (?, 'TASK_REWARD', 'CREDIT', ?, ?, 'TASK', ?, ?)
             `).run(
               completion.user_id,
-              completion.reward_amount,
+              completion.reward_minor,
               completion.currency,
               `task:${completion.task_id}`,
               idempotencyKey
