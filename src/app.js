@@ -15,8 +15,6 @@ app.use(cors({ origin: env.CORS_ORIGIN === '*' ? true : env.CORS_ORIGIN, credent
 app.use(express.json({ limit:'1mb', verify:(req, res, buf)=>{ req.rawBody = Buffer.from(buf); } }));
 app.use('/api', rateLimit({windowMs:60000,max:180}), api);
 app.get('/', (req, res) => {
-  res.sendFile(require('path').join(__dirname, '../index.html'));
-});
 app.use(express.static(require('path').join(__dirname,'../public')));
 const {notFound,errorHandler}=require('./middleware/errorHandler');
 app.use(notFound); app.use(errorHandler);
