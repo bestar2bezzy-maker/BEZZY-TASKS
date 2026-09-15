@@ -1,39 +1,3 @@
-<!doctype html><html lang="fr"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Bezzy Tasks</title>
-<style>
-:root{--bg:#07150f;--panel:#0e2419;--panel2:#122d20;--gold:#d9b65b;--text:#f5f3ea;--muted:#a8b5ad;--line:#214332;--ok:#72d6a0}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top,#153b28 0,#07150f 48%,#050d09 100%);color:var(--text);font-family:Inter,system-ui,Arial,sans-serif}button,input{font:inherit}button{cursor:pointer}
-header{position:sticky;top:0;z-index:5;background:rgba(5,13,9,.88);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);padding:14px 5% ;display:flex;justify-content:space-between;align-items:center}.brand{font-weight:900;letter-spacing:1px}.brand span{color:var(--gold)}.wrap{max-width:1100px;margin:auto;padding:30px 5%}
-.hero{display:grid;grid-template-columns:1.4fr .8fr;gap:20px;align-items:stretch}.card{background:linear-gradient(145deg,rgba(18,45,32,.96),rgba(9,26,18,.96));border:1px solid var(--line);border-radius:22px;padding:22px;box-shadow:0 18px 50px #0005}.hero h1{font-size:clamp(32px,5vw,58px);margin:0 0 10px}.gold{color:var(--gold)}.muted{color:var(--muted)}.balance{font-size:42px;font-weight:900;color:var(--gold)}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:20px 0}.stat{padding:18px;background:#0b2016;border:1px solid var(--line);border-radius:16px}.stat b{font-size:25px}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:26px 0 16px}.tab{background:#0b2016;border:1px solid var(--line);color:var(--text);padding:11px 16px;border-radius:999px}.tab.active{border-color:var(--gold);color:var(--gold)}.offers{display:grid;grid-template-columns:repeat(2,1fr);gap:15px}.offer{padding:19px;border-radius:18px;background:#0b2016;border:1px solid var(--line)}.offer h3{margin:0 0 8px}.reward{color:var(--gold);font-weight:900;font-size:20px}.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px}.primary{background:linear-gradient(135deg,#d9b65b,#b88f32);border:0;color:#07150f;font-weight:900;padding:11px 15px;border-radius:12px}.secondary{background:transparent;border:1px solid #42624f;color:var(--text);padding:10px 14px;border-radius:12px}.danger{border-color:#713d3d;color:#ffb0a7}.auth{max-width:460px;margin:60px auto}.field{display:grid;gap:7px;margin:12px 0}.field input,.field select,.field textarea{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);background:#07150f;color:var(--text)}.hidden{display:none}.toast{position:fixed;right:18px;bottom:18px;background:#0e2419;border:1px solid var(--gold);padding:13px 16px;border-radius:12px;display:none;max-width:340px}.small{font-size:13px}.history{display:grid;gap:9px}.row{display:flex;justify-content:space-between;gap:12px;padding:12px;border-bottom:1px solid var(--line)}@media(max-width:760px){.hero,.offers{grid-template-columns:1fr}.grid{grid-template-columns:1fr}.balance{font-size:34px}}
-</style></head><body>
-<header><div class="brand">BEZZY <span>TASKS</span></div><div id="headerActions"></div></header>
-<main class="wrap">
-<section id="authView" class="auth card">
-<h2>Bienvenue sur Bezzy Tasks</h2><p class="muted">Une plateforme de tâches et d'offres rémunérées, avec validation réelle des campagnes partenaires.</p>
-<div class="tabs"><button class="tab active" onclick="showAuth('login',this)">Connexion</button><button class="tab" onclick="showAuth('register',this)">Créer un compte</button></div>
-<form id="authForm"><div class="field"><label>Pays</label><select id="country" required></select></div><div class="field"><label>Numéro de téléphone</label><input id="phone" required placeholder="06..."></div><div class="field"><label>Mot de passe</label><input id="password" type="password" minlength="8" required></div><button class="primary" style="width:100%">Continuer</button></form>
-<p id="authMsg" class="muted small"></p></section>
-<section id="appView" class="hidden">
-<div class="hero"><div class="card"><p class="gold">TABLEAU DE BORD</p><h1>Gagnez en réalisant des <span class="gold">missions utiles.</span></h1><p class="muted">Les campagnes sont fournies par des partenaires. Un clic ne donne jamais automatiquement droit à une récompense.</p></div>
-<div class="card"><div class="muted">Solde disponible</div><div class="balance"><span id="balance">0</span> FCFA</div><div class="small muted">Gains cumulés : <span id="earned">0</span> FCFA</div></div></div>
-<div class="grid"><div class="stat"><div class="muted">Code parrainage</div><b id="ref">—</b></div><div class="stat"><div class="muted">Compte</div><b id="phoneShow">—</b></div><div class="stat"><div class="muted">Statut</div><b class="gold">Actif</b></div></div>
-<div class="tabs"><button class="tab active" data-tab="offers">🎮 Jeux & applications</button><button class="tab" data-tab="history">📜 Historique</button><button class="tab" data-tab="withdraw">💸 Retrait</button></div>
-<div id="offersPane"><div id="offers" class="offers"></div></div><div id="historyPane" class="hidden"><div id="history" class="history"></div></div>
-<div id="withdrawPane" class="hidden">
-<div class="card">
-<h2>Retirer mes gains</h2>
-<p class="muted">Choisissez un moyen disponible dans votre pays. La vérification du téléphone est obligatoire avant le retrait.</p><div id="verifyBox" class="card" style="margin:12px 0"><b>🔐 Vérification du numéro</b><p class="small muted">Cette version prépare l’envoi SMS réel. Aucun code n’est envoyé automatiquement tant qu’un fournisseur SMS n’est pas configuré.</p><button class="secondary" onclick="requestVerification()">Demander un code</button><div class="field"><input id="vcode" inputmode="numeric" maxlength="6" placeholder="Code à 6 chiffres"><button class="secondary" onclick="confirmVerification()">Confirmer</button></div></div>
-<div class="field"><label>Mode de paiement</label><select id="wmethod"></select></div>
-<div class="field"><label>Compte / numéro de paiement</label><input id="waccount" placeholder="Numéro Mobile Money ou compte bancaire"></div>
-<div class="field"><label>Montant (FCFA)</label><input id="wamount" type="number" min="1000" placeholder="1000"></div>
-<button class="primary" onclick="withdraw()">Demander le retrait</button>
-<p class="small muted">Le site enregistre la demande. Le paiement réel doit ensuite être confirmé par le système de décaissement.</p>
-</div>
-<div class="card"><h3>Mes demandes</h3><div id="withdrawals"></div></div>
-</div>
-</section></main><div id="toast" class="toast"></div>
-<script>
 let token=localStorage.getItem("bz_token"), authMode="login";
 const $=id=>document.getElementById(id);
 function toast(m){$("toast").textContent=m;$("toast").style.display="block";setTimeout(()=>$("toast").style.display="none",3500)}
@@ -58,3 +22,4 @@ function esc(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",
 loadCountries();
 load();
 </script></body></html>
+  
