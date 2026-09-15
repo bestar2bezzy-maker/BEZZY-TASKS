@@ -84,7 +84,7 @@ router.post('/:id/start', (req, res, next) => {
       LIMIT 1
     `).get(req.user.sub, req.params.id);
 
-    if (existing && ['PENDING', 'APPROVED'].includes(existing.status)) {
+    if (existing && ['PENDING', 'APPROVED', 'STARTED'].includes(existing.status)) {
 
     const result = db.prepare(`
       const completionId = crypto.randomUUID();
@@ -232,9 +232,7 @@ router.post(
         db.prepare(`
           UPDATE task_completions
           SET status = ?,
-              review_note = ?,
-              reviewed_at = CURRENT_TIMESTAMP,
-              reviewed_by = ?
+    reviewed_at = CURRENT_TIMESTAMP
           WHERE id = ?
         `).run(
   decision,
