@@ -212,7 +212,68 @@ router.post('/auth/login', async (req, res, next) => {
   }
 });
 
-router.get('/auth/me', requireAuth, (req, res) => {
+router.get('/me', requireAuth, (req, res) => {
+  const db = getDb();
+
+  const user = db
+    .prepare(`
+      SELECT id, phone, country_code, referral_code, role, created_at
+      FROM users
+      WHERE id = ?
+    `)
+    .get(req.user.sub);
+
+  if (!user) {
+    return res.status(404).json({
+      error: 'USER_NOT_FOUND'
+    });
+  }
+
+  const balanceRows = db
+    .prepare(`
+      SELECT currency, direction, amount_minor
+      FROM ledger_entries
+      WHERE user_id = ?
+    `)
+    .all(req.user.sub);
+
+  const balances = {};
+  let totalEarned = 0;
+
+  for (const entry of balanceRows) {
+    const amount = Number(entry.amount_minor || 0);
+    const currency = entry.currency || 'XAF';
+
+    if (!balances[currency]) {
+      balances[currency] = 0;
+    }
+
+    if (entry.direction === 'CREDIT') {
+      balances[currency] += amount;
+      totalEarned += amount;
+    } else if (entry.direction === 'DEBIT') {
+      balances[currency] -= amount;
+    }
+  }
+
+  const primaryCurrency =
+    user.country_code === 'CG' ? 'XAF' :
+    user.country_code === 'CD' ? 'CDF' :
+    user.country_code === 'NG' ? 'NGN' :
+    user.country_code === 'GH' ? 'GHS' :
+    user.country_code === 'KE' ? 'KES' :
+    user.country_code === 'US' ? 'USD' :
+    user.country_code === 'FR' ? 'EUR' :
+    'XAF';
+
+  res.json({
+    ...user,
+    balance: balances[primaryCurrency] || 0,
+    total_earned: totalEarned,
+    currency: primaryCurrency,
+    balances
+  });
+});
   const db = getDb();
 
   const user = db
