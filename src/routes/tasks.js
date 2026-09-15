@@ -104,13 +104,7 @@ db.prepare(`
 );
       )
       VALUES (?, ?, 'started')
-    `).run(req.user.sub, req.params.id);
-
-    const completion = db.prepare(`
-  SELECT *
-  FROM task_completions
-  WHERE id = ?
-`).get(completionId);
+     dget(completionId);
 
     res.status(201).json({ completion });
   } catch (error) {
@@ -147,8 +141,8 @@ router.post('/:id/submit', (req, res, next) => {
 
     db.prepare(`
       UPDATE task_completions
-      SET status = 'pending',
-          evidence = ?,
+      SET status = 'PENDING',
+          evidence_json = ?,
           submitted_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(
@@ -179,11 +173,11 @@ router.get('/history/me', (req, res, next) => {
         tc.id,
         tc.task_id,
         tc.status,
-        tc.evidence,
+        tc.evidence_json,
         tc.submitted_at,
         tc.reviewed_at,
         t.title,
-        t.reward_amount,
+        t.reward_minor,
         t.currency
       FROM task_completions tc
       JOIN tasks t ON t.id = tc.task_id
@@ -215,7 +209,7 @@ router.post(
       const completion = db.prepare(`
         SELECT
           tc.*,
-          t.reward_amount,
+          t.reward_minor,
           t.currency
         FROM task_completions tc
         JOIN tasks t ON t.id = tc.task_id
