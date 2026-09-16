@@ -1,0 +1,738 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Bezzy Tasks</title>
+  <meta name="theme-color" content="#07140f">
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#07140f;color:#f5f5f5}
+    .container{width:min(1100px,94%);margin:auto}
+    header{padding:18px 0;border-bottom:1px solid #19372b;background:#081b14;position:sticky;top:0;z-index:10}
+    .header-inner{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .logo{font-size:22px;font-weight:800;color:#d8ad45}
+    .header-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    button,input,select{font:inherit}
+    button{cursor:pointer}
+    .card{background:#0c2119;border:1px solid #1d4434;border-radius:16px;padding:20px;box-shadow:0 8px 30px rgba(0,0,0,.2)}
+    .auth{max-width:560px;margin:50px auto}
+    h1,h2,h3{margin-top:0}
+    .gold{color:#d8ad45}.muted{color:#9eafa8}.small{font-size:13px}
+    .tabs{display:flex;gap:8px;margin:20px 0}
+    .tab,.authChoice button{flex:1;border:1px solid #28523f;background:#0a1813;color:#b9c9c2;padding:11px;border-radius:10px}
+    .tab.active,.authChoice button.active{background:#d8ad45;color:#07140f;border-color:#d8ad45;font-weight:700}
+    .field{margin:14px 0}
+    label{display:block;margin-bottom:7px;font-weight:600}
+    input,select{width:100%;padding:12px;border-radius:10px;border:1px solid #315a48;background:#07140f;color:#fff;outline:none}
+    input:focus,select:focus{border-color:#d8ad45}
+    .primary{background:#d8ad45;color:#07140f;border:0;border-radius:10px;padding:13px 16px;font-weight:800}
+    .secondary{background:#123024;color:#fff;border:1px solid #315a48;border-radius:10px;padding:10px 14px}
+    .danger{background:#6e2424;color:#fff;border:0;border-radius:10px;padding:10px 14px}
+    .hidden{display:none!important}
+    .authChoice{display:flex;gap:8px;margin:14px 0}
+    .phone-line{display:grid;grid-template-columns:145px 1fr;gap:8px}
+    .dial-code{font-weight:700;text-align:center;background:#10291f}
+    .country-info{margin-top:7px;padding:9px 11px;border-radius:8px;background:#10291f;border:1px solid #1d4434}
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;margin:22px 0}
+    .stat{padding:18px;background:#0c2119;border:1px solid #1d4434;border-radius:14px}
+    .stat strong{display:block;font-size:24px;color:#d8ad45;margin-top:7px}
+    .section{margin:20px 0}
+    .offer,.history-item,.withdraw-item{background:#091a13;border:1px solid #1d4434;border-radius:12px;padding:15px;margin:10px 0}
+    .row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+    .badge{display:inline-block;padding:5px 9px;border-radius:999px;background:#173d2e;color:#d8ad45;font-size:12px}
+    .message{min-height:20px;margin-top:10px}.success{color:#71d49a}.error{color:#ff8f8f}.loading{opacity:.7}
+    .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    @media(max-width:700px){.grid{grid-template-columns:1fr}.header-inner{align-items:flex-start;flex-direction:column}.phone-line{grid-template-columns:120px 1fr}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="container header-inner">
+    <div class="logo">BEZZY TASKS</div>
+    <div id="headerActions" class="header-actions"></div>
+  </div>
+</header>
+
+<main class="container">
+<section id="authView" class="auth card">
+  <h2>Bienvenue sur <span class="gold">Bezzy Tasks</span></h2>
+  <p class="muted">Une plateforme de tâches et d'offres rémunérées.</p>
+
+  <div class="tabs">
+    <button id="loginTab" class="tab active" type="button">Connexion</button>
+    <button id="registerTab" class="tab" type="button">Créer un compte</button>
+  </div>
+
+  <form id="authForm" novalidate>
+    <div class="field">
+      <label for="countrySearch">Pays</label>
+      <input id="countrySearch" type="search" placeholder="🔍 Rechercher votre pays..." autocomplete="off">
+      <select id="country" required>
+        <option value="">Chargement des pays...</option>
+      </select>
+      <div id="countryCount" class="small muted"></div>
+      <div id="countryInfo" class="country-info small muted">Sélectionnez votre pays.</div>
+    </div>
+
+    <div class="authChoice">
+      <button type="button" id="phoneModeBtn" class="active">📱 Téléphone</button>
+      <button type="button" id="emailModeBtn">📧 E-mail</button>
+    </div>
+
+    <div class="field" id="phoneField">
+      <label for="phone">Numéro de téléphone</label>
+      <div class="phone-line">
+        <input id="dialCode" class="dial-code" value="+242" readonly aria-label="Indicatif du pays">
+        <input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="06 123 45 67">
+      </div>
+      <div class="small muted">L'indicatif est ajouté automatiquement selon le pays.</div>
+    </div>
+
+    <div class="field hidden" id="emailField">
+      <label for="email">Adresse e-mail</label>
+      <input id="email" type="email" inputmode="email" autocomplete="email" placeholder="exemple@email.com">
+    </div>
+
+    <div class="field">
+      <label for="password">Mot de passe</label>
+      <input id="password" type="password" minlength="8" autocomplete="current-password" placeholder="Minimum 8 caractères" required>
+    </div>
+
+    <button id="authSubmit" class="primary" style="width:100%" type="submit">Se connecter</button>
+  </form>
+  <p id="authMsg" class="message muted small"></p>
+</section>
+
+<section id="appView" class="hidden">
+  <div class="section">
+    <div class="card">
+      <div class="row">
+        <div><h2>Tableau de bord</h2><div class="muted small">Bienvenue sur votre espace Bezzy Tasks.</div></div>
+        <span id="statusBadge" class="badge">Utilisateur</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="stat"><div class="muted small">Solde disponible</div><strong id="balance">0 FCFA</strong></div>
+    <div class="stat"><div class="muted small">Total gagné</div><strong id="totalEarned">0 FCFA</strong></div>
+    <div class="stat"><div class="muted small">Code de parrainage</div><strong id="referralCode">—</strong></div>
+  </div>
+
+  <div class="section card">
+    <h3>Mon compte</h3>
+    <div class="row"><span class="muted">Contact</span><strong id="phoneShow">—</strong></div>
+    <div class="row" style="margin-top:10px"><span class="muted">E-mail</span><strong id="emailShow">—</strong></div>
+    <div class="row" style="margin-top:10px"><span class="muted">Pays</span><strong id="countryShow">—</strong></div>
+    <div class="row" style="margin-top:10px"><span class="muted">Statut</span><strong id="accountStatus">Actif</strong></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="offers" type="button">🎯 Offres</button>
+    <button class="tab" data-tab="history" type="button">📊 Historique</button>
+    <button class="tab" data-tab="withdraw" type="button">💰 Retrait</button>
+  </div>
+
+  <section id="offersTab" class="section">
+    <div class="card"><h3>Offres disponibles</h3><div id="offers">Chargement des offres...</div></div>
+  </section>
+
+  <section id="historyTab" class="section hidden">
+    <div class="card"><h3>Historique des gains</h3><div id="history">Chargement...</div></div>
+  </section>
+
+  <section id="withdrawTab" class="section hidden">
+    <div class="card">
+      <h3>Effectuer un retrait</h3>
+      <div class="field">
+        <label for="payoutMethod">Mode de paiement</label>
+        <select id="payoutMethod"><option value="">Chargement...</option></select>
+      </div>
+      <div class="field">
+        <label for="payoutAccount">Compte / numéro de paiement</label>
+        <input id="payoutAccount" placeholder="Exemple : numéro Mobile Money">
+      </div>
+      <div class="field">
+        <label for="withdrawAmount">Montant du retrait</label>
+        <input id="withdrawAmount" type="number" min="1000" max="20000" step="1" placeholder="Montant en FCFA">
+        <div class="small muted">Retrait standard : 1 000 à 10 000 FCFA. Les comptes Pro peuvent aller jusqu'à 20 000 FCFA.</div>
+      </div>
+      <button id="withdrawBtn" class="primary" type="button">Demander le retrait</button>
+      <p id="withdrawMsg" class="message muted small"></p>
+    </div>
+
+    <div class="card" style="margin-top:15px"><h3>Vérification du compte</h3><div id="verificationBox" class="muted">Chargement...</div></div>
+    <div class="card" style="margin-top:15px"><h3>Mes retraits</h3><div id="withdrawals">Chargement...</div></div>
+  </section>
+</section>
+</main>
+
+<script>
+"use strict";
+
+let token = localStorage.getItem("bz_token") || null;
+let authMode = "login";
+let contactMode = "phone";
+let allCountries = [];
+let currentUser = null;
+
+const $ = id => document.getElementById(id);
+
+function setMessage(message,type="muted"){
+  const el=$("authMsg");
+  if(!el)return;
+  el.textContent=message||"";
+  el.className="message small "+type;
+}
+
+function setWithdrawMessage(message,type="muted"){
+  const el=$("withdrawMsg");
+  if(!el)return;
+  el.textContent=message||"";
+  el.className="message small "+type;
+}
+
+function setContactMode(mode){
+  contactMode=mode;
+  $("phoneModeBtn").classList.toggle("active",mode==="phone");
+  $("emailModeBtn").classList.toggle("active",mode==="email");
+  $("phoneField").classList.toggle("hidden",mode!=="phone");
+  $("emailField").classList.toggle("hidden",mode!=="email");
+  $("phone").required=mode==="phone";
+  $("email").required=mode==="email";
+}
+
+function showAuth(mode,btn){
+  authMode=mode;
+  document.querySelectorAll("#authView .tab").forEach(x=>x.classList.remove("active"));
+  if(btn)btn.classList.add("active");
+  $("authSubmit").textContent=mode==="login"?"Se connecter":"Créer mon compte";
+  $("password").autocomplete=mode==="login"?"current-password":"new-password";
+  setMessage("");
+  setContactMode(contactMode);
+}
+
+async function api(url,options={}){
+  const config={...options,headers:{...(options.headers||{})}};
+  if(options.body && !config.headers["Content-Type"])config.headers["Content-Type"]="application/json";
+  if(token)config.headers.Authorization="Bearer "+token;
+
+  let response;
+  try{
+    response=await fetch(url,config);
+  }catch(e){
+    throw new Error("Impossible de contacter le serveur. Vérifiez votre connexion.");
+  }
+
+  const text=await response.text();
+  let data={};
+  try{data=text?JSON.parse(text):{};}catch(e){data={message:text};}
+
+  if(!response.ok){
+    const error=new Error(data.message||data.error||"Erreur serveur.");
+    error.status=response.status;
+    error.data=data;
+    throw error;
+  }
+  return data;
+}
+
+function esc(value){
+  return String(value??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");
+}
+
+function normalizeDigits(value){
+  return String(value||"").replace(/[^\d]/g,"");
+}
+
+function buildInternationalPhone(){
+  const dial=String($("dialCode").value||"").trim();
+  let number=normalizeDigits($("phone").value);
+  if(!dial||!number)return "";
+  if(number.startsWith("00"))number=number.slice(2);
+  const dialDigits=normalizeDigits(dial);
+  if(number.startsWith(dialDigits))return "+"+number;
+  number=number.replace(/^0+/,"");
+  return "+"+dialDigits+number;
+}
+
+function renderCountries(countries){
+  const select=$("country");
+  if(!select)return;
+  const previous=select.value;
+  select.innerHTML="";
+  if(!countries.length){
+    select.innerHTML='<option value="">Aucun pays trouvé</option>';
+    $("countryCount").textContent="";
+    return;
+  }
+  const fragment=document.createDocumentFragment();
+  countries.forEach(country=>{
+    const option=document.createElement("option");
+    option.value=country.code||"";
+    option.textContent=country.dial_code?`${country.name} (${country.dial_code})`:country.name||country.code||"";
+    fragment.appendChild(option);
+  });
+  select.appendChild(fragment);
+  $("countryCount").textContent=`${countries.length} pays disponible(s)`;
+  if(previous && countries.some(c=>c.code===previous))select.value=previous;
+}
+
+function updateCountryInfo(){
+  const select=$("country");
+  const code=select.value;
+  const country=allCountries.find(c=>c.code===code);
+  if(!country){
+    $("dialCode").value="+242";
+    $("countryInfo").textContent="Sélectionnez votre pays.";
+    return;
+  }
+  $("dialCode").value=country.dial_code||"";
+  $("countryInfo").innerHTML=`<strong>${esc(country.name||code)}</strong>${country.dial_code?` — indicatif <strong>${esc(country.dial_code)}</strong>`:""}`;
+}
+
+async function loadCountries(){
+  const select=$("country");
+  try{
+    select.innerHTML='<option value="">Chargement des pays...</option>';
+    const data=await api("/api/countries");
+    const countries=Array.isArray(data)?data:(Array.isArray(data.countries)?data.countries:[]);
+    allCountries=countries.filter(Boolean).sort((a,b)=>String(a.name||"").localeCompare(String(b.name||""),"fr"));
+    renderCountries(allCountries);
+    const congo=allCountries.find(c=>c.code==="CG");
+    if(congo)select.value="CG";
+    else if(allCountries.length)select.selectedIndex=0;
+    updateCountryInfo();
+  }catch(error){
+    console.error("Erreur pays:",error);
+    select.innerHTML='<option value="">Erreur de chargement</option>';
+    $("countryCount").textContent="Impossible de charger les pays.";
+    $("countryInfo").textContent=error.message;
+  }
+}
+
+function filterCountries(){
+  const query=$("countrySearch").value.trim().toLowerCase();
+  if(!query){
+    renderCountries(allCountries);
+    updateCountryInfo();
+    return;
+  }
+  const filtered=allCountries.filter(country=>{
+    const name=String(country.name||"").toLowerCase();
+    const code=String(country.code||"").toLowerCase();
+    const dial=String(country.dial_code||"").toLowerCase();
+    return name.includes(query)||code.includes(query)||dial.includes(query);
+  });
+  renderCountries(filtered);
+  if(filtered.length)$("country").value=filtered[0].code;
+  updateCountryInfo();
+}
+
+async function submitAuth(event){
+  event.preventDefault();
+  event.stopPropagation();
+
+  const submit=$("authSubmit");
+  const country=$("country").value;
+  const password=$("password").value.trim();
+  const email=$("email").value.trim().toLowerCase();
+  const phone=buildInternationalPhone();
+
+  setMessage("");
+
+  if(!country){
+    setMessage("Veuillez sélectionner votre pays.","error");
+    return;
+  }
+  if(password.length<8){
+    setMessage("Le mot de passe doit contenir au moins 8 caractères.","error");
+    return;
+  }
+
+  submit.disabled=true;
+  submit.classList.add("loading");
+
+  try{
+    if(authMode==="login"){
+      const identifier=contactMode==="email"?email:phone;
+      if(!identifier){
+        setMessage(contactMode==="email"?"Veuillez saisir votre e-mail.":"Veuillez saisir votre numéro de téléphone.","error");
+        return;
+      }
+
+      const data=await api("/api/auth/login",{
+        method:"POST",
+        body:JSON.stringify({identifier,password})
+      });
+
+      if(!data.token && !data.accessToken){
+        throw new Error("Connexion réussie mais aucun token n'a été reçu.");
+      }
+
+      token=data.token||data.accessToken;
+      localStorage.setItem("bz_token",token);
+      setMessage("Connexion réussie.","success");
+      await load();
+    }else{
+      const payload={country_code:country,password};
+      if(contactMode==="email"){
+        if(!email){
+          setMessage("Veuillez saisir votre adresse e-mail.","error");
+          return;
+        }
+        payload.email=email;
+      }else{
+        if(!phone){
+          setMessage("Veuillez saisir votre numéro de téléphone.","error");
+          return;
+        }
+        payload.phone=phone;
+      }
+
+      const data=await api("/api/auth/register",{
+        method:"POST",
+        body:JSON.stringify(payload)
+      });
+
+      if(!data.token && !data.accessToken){
+        throw new Error(data.message||"Compte créé mais aucun token n'a été reçu.");
+      }
+
+      token=data.token||data.accessToken;
+      localStorage.setItem("bz_token",token);
+      setMessage("Compte créé avec succès.","success");
+      await load();
+    }
+  }catch(error){
+    console.error("Erreur authentification:",error);
+    setMessage(error.message||"Une erreur est survenue.","error");
+  }finally{
+    submit.disabled=false;
+    submit.classList.remove("loading");
+  }
+}
+
+function showApp(){
+  $("authView").classList.add("hidden");
+  $("appView").classList.remove("hidden");
+  $("headerActions").innerHTML='<button class="danger" type="button" id="logoutBtn">Se déconnecter</button>';
+  $("logoutBtn").onclick=logout;
+}
+
+function showAuthView(){
+  $("authView").classList.remove("hidden");
+  $("appView").classList.add("hidden");
+  $("headerActions").innerHTML="";
+}
+
+function countryName(code){
+  const c=allCountries.find(x=>x.code===code);
+  return c?c.name:code||"—";
+}
+
+function money(value){
+  const n=Number(value||0);
+  return new Intl.NumberFormat("fr-FR").format(n)+" FCFA";
+}
+
+function pick(obj,...keys){
+  for(const key of keys){
+    if(obj && obj[key]!==undefined && obj[key]!==null)return obj[key];
+  }
+  return null;
+}
+
+async function loadUser(){
+  const data=await api("/api/me");
+  currentUser=data.user||data;
+  const u=currentUser;
+
+  $("phoneShow").textContent=u.phone||"—";
+  $("emailShow").textContent=u.email||"—";
+  $("countryShow").textContent=countryName(u.country_code||u.countryCode);
+  $("accountStatus").textContent=u.status||u.account_status||"Actif";
+  $("statusBadge").textContent=u.role||u.trust_level||"Utilisateur";
+  $("balance").textContent=money(pick(u,"balance","available_balance","wallet_balance"));
+  $("totalEarned").textContent=money(pick(u,"total_earned","totalEarned","earnings"));
+  $("referralCode").textContent=pick(u,"referral_code","referralCode")||"—";
+  showApp();
+}
+
+async function loadOffers(){
+  const box=$("offers");
+  try{
+    const data=await api("/api/tasks");
+    const offers=Array.isArray(data)?data:(Array.isArray(data.tasks)?data.tasks:(Array.isArray(data.offers)?data.offers:[]));
+    if(!offers.length){
+      box.innerHTML='<p class="muted">Aucune offre disponible pour le moment.</p>';
+      return;
+    }
+    box.innerHTML=offers.map(task=>{
+      const id=pick(task,"id","task_id");
+      const title=pick(task,"title","name")||"Offre";
+      const reward=pick(task,"reward","reward_amount","amount")||0;
+      const description=pick(task,"description","details")||"";
+      return `<div class="offer">
+        <div class="row"><strong>${esc(title)}</strong><span class="badge">${esc(money(reward))}</span></div>
+        <p class="muted small">${esc(description)}</p>
+        ${id!==null?`<button class="primary" type="button" onclick="startOffer('${esc(id)}')">Commencer</button>`:""}
+      </div>`;
+    }).join("");
+  }catch(error){
+    box.innerHTML=`<p class="error">${esc(error.message)}</p>`;
+  }
+}
+
+async function startOffer(id){
+  try{
+    const data=await api("/api/tasks/"+encodeURIComponent(id)+"/start",{method:"POST",body:JSON.stringify({})});
+    alert(data.message||"Offre démarrée.");
+    await loadOffers();
+    await loadUser();
+  }catch(error){
+    alert(error.message||"Impossible de démarrer cette offre.");
+  }
+}
+
+async function loadHistory(){
+  const box=$("history");
+  try{
+    const data=await api("/api/tasks/history/me");
+    const rows=Array.isArray(data)?data:(Array.isArray(data.history)?data.history:(Array.isArray(data.tasks)?data.tasks:[]));
+    if(!rows.length){
+      box.innerHTML='<p class="muted">Aucun historique pour le moment.</p>';
+      return;
+    }
+    box.innerHTML=rows.map(row=>{
+      const title=pick(row,"title","task_title","name")||"Tâche";
+      const reward=pick(row,"reward","reward_amount","amount")||0;
+      const status=pick(row,"status","state")||"—";
+      return `<div class="history-item"><div class="row"><strong>${esc(title)}</strong><span class="badge">${esc(status)}</span></div><div class="muted small">Gain : ${esc(money(reward))}</div></div>`;
+    }).join("");
+  }catch(error){
+    box.innerHTML=`<p class="error">${esc(error.message)}</p>`;
+  }
+}
+
+async function loadPayoutMethods(){
+  const select=$("payoutMethod");
+  try{
+    const data=await api("/api/payout-methods");
+    const methods=Array.isArray(data)?data:(Array.isArray(data.methods)?data.methods:(Array.isArray(data.payout_methods)?data.payout_methods:[]));
+    select.innerHTML='<option value="">Sélectionner un mode</option>';
+    methods.forEach(method=>{
+      const id=pick(method,"id","code","value");
+      const name=pick(method,"name","label","title")||id;
+      if(id!==null){
+        const option=document.createElement("option");
+        option.value=id;
+        option.textContent=name;
+        select.appendChild(option);
+      }
+    });
+    if(!methods.length)select.innerHTML='<option value="">Aucun mode disponible</option>';
+  }catch(error){
+    select.innerHTML='<option value="">Erreur de chargement</option>';
+  }
+}
+
+async function loadWithdrawals(){
+  const box=$("withdrawals");
+  try{
+    const data=await api("/api/withdrawals");
+    const rows=Array.isArray(data)?data:(Array.isArray(data.withdrawals)?data.withdrawals:[]);
+    if(!rows.length){
+      box.innerHTML='<p class="muted">Aucun retrait enregistré.</p>';
+      return;
+    }
+    box.innerHTML=rows.map(row=>{
+      const amount=pick(row,"amount","requested_amount")||0;
+      const fee=pick(row,"fee","withdrawal_fee")||0;
+      const status=pick(row,"status","state")||"—";
+      return `<div class="withdraw-item"><div class="row"><strong>${esc(money(amount))}</strong><span class="badge">${esc(status)}</span></div><div class="muted small">Frais : ${esc(money(fee))}</div></div>`;
+    }).join("");
+  }catch(error){
+    box.innerHTML=`<p class="error">${esc(error.message)}</p>`;
+  }
+}
+
+async function loadVerification(){
+  const box=$("verificationBox");
+  try{
+    const data=await api("/api/verification");
+    const v=data.verification||data;
+    const status=pick(v,"status","state")||"Non vérifié";
+    box.innerHTML=`<div class="row"><span>Statut</span><strong>${esc(status)}</strong></div>`;
+  }catch(error){
+    box.innerHTML=`<p class="muted">${esc(error.message)}</p>`;
+  }
+}
+
+async function requestWithdrawal(){
+  const method=$("payoutMethod").value;
+  const account=$("payoutAccount").value.trim();
+  const amount=Number($("withdrawAmount").value);
+
+  setWithdrawMessage("");
+
+  if(!method||!account||!amount){
+    setWithdrawMessage("Veuillez remplir tous les champs du retrait.","error");
+    return;
+  }
+  if(amount<1000||amount>20000){
+    setWithdrawMessage("Le montant doit être compris entre 1 000 et 20 000 FCFA.","error");
+    return;
+  }
+
+  const btn=$("withdrawBtn");
+  btn.disabled=true;
+
+  try{
+    const data=await api("/api/withdrawals",{
+      method:"POST",
+      body:JSON.stringify({payout_method:method,payout_account:account,amount})
+    });
+    setWithdrawMessage(data.message||"Demande de retrait enregistrée.","success");
+    $("payoutAccount").value="";
+    $("withdrawAmount").value="";
+    await Promise.all([loadUser(),loadWithdrawals()]);
+  }catch(error){
+    setWithdrawMessage(error.message||"Impossible d'effectuer le retrait.","error");
+  }finally{
+    btn.disabled=false;
+  }
+}
+
+function initializeTabs(){
+  document.querySelectorAll("[data-tab]").forEach(button=>{
+    button.addEventListener("click",async()=>{
+      document.querySelectorAll("[data-tab]").forEach(x=>x.classList.remove("active"));
+      button.classList.add("active");
+      ["offers","history","withdraw"].forEach(tab=>{
+        $(tab+"Tab").classList.toggle("hidden",button.dataset.tab!==tab);
+      });
+      if(button.dataset.tab==="history")await loadHistory();
+      if(button.dataset.tab==="withdraw"){
+        await loadPayoutMethods();
+        await loadVerification();
+        await loadWithdrawals();
+      }
+    });
+  });
+}
+
+function initializeEvents(){
+  const authForm = $("authForm");
+  if(authForm) authForm.addEventListener("submit", submitAuth);
+
+  const country = $("country");
+  if(country) country.addEventListener("change", updateCountryInfo);
+
+  const countrySearch = $("countrySearch");
+  if(countrySearch) countrySearch.addEventListener("input", filterCountries);
+
+  const withdrawBtn = $("withdrawBtn");
+  if(withdrawBtn) withdrawBtn.addEventListener("click", requestWithdrawal);
+
+  const phone = $("phone");
+  if(phone){
+    phone.addEventListener("input", ()=>{
+      phone.value = phone.value.replace(/[^\d\s+()-]/g,"");
+    });
+  }
+
+  const loginTab = $("loginTab");
+  if(loginTab) loginTab.addEventListener("click", e=>{
+    e.preventDefault();
+    showAuth("login", loginTab);
+  });
+
+  const registerTab = $("registerTab");
+  if(registerTab) registerTab.addEventListener("click", e=>{
+    e.preventDefault();
+    showAuth("register", registerTab);
+  });
+
+  const phoneMode = $("phoneMode");
+  if(phoneMode) phoneMode.addEventListener("click", e=>{
+    e.preventDefault();
+    setContactMode("phone");
+  });
+
+  const emailMode = $("emailMode");
+  if(emailMode) emailMode.addEventListener("click", e=>{
+    e.preventDefault();
+    setContactMode("email");
+  });
+}
+
+async function load(){
+  if(!token){
+    showAuthView();
+    return;
+  }
+  try{
+    await loadUser();
+    await Promise.allSettled([loadOffers(),loadHistory()]);
+  }catch(error){
+    console.error("Session invalide:",error);
+    token=null;
+    localStorage.removeItem("bz_token");
+    showAuthView();
+    setMessage("Votre session a expiré. Veuillez vous reconnecter.","error");
+  }
+}
+
+function logout(){
+  token=null;
+  currentUser=null;
+  localStorage.removeItem("bz_token");
+  showAuthView();
+  $("authForm").reset();
+  $("countrySearch").value="";
+  setContactMode("phone");
+  loadCountries();
+  setMessage("Vous êtes déconnecté.","success");
+}
+
+
+window.addEventListener("error", function(event){
+  const box = document.getElementById("authMsg");
+  if(box){
+    box.textContent = "Erreur JavaScript : " + (event.message || "erreur inconnue");
+    box.style.display = "block";
+  }
+});
+
+window.addEventListener("unhandledrejection", function(event){
+  const box = document.getElementById("authMsg");
+  if(box){
+    const reason = event.reason && event.reason.message
+      ? event.reason.message
+      : String(event.reason || "erreur inconnue");
+    box.textContent = "Erreur : " + reason;
+    box.style.display = "block";
+  }
+});
+
+document.addEventListener("DOMContentLoaded", async()=>{
+  try{
+    initializeEvents();
+    if(typeof initializeTabs === "function") initializeTabs();
+    setContactMode("phone");
+    await loadCountries();
+    await load();
+  }catch(error){
+    console.error(error);
+    const box = $("authMsg");
+    if(box){
+      box.textContent = "Erreur d'initialisation : " + (error.message || error);
+      box.style.display = "block";
+    }
+  }
+});
+</script>
+</body>
+</html>
