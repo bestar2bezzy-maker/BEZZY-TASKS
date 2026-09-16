@@ -1,27 +1,1209 @@
-le token=localStorage.getItem("bz_token"), authMode="login";
-const $=id=>document.getElementById(id);
-function toast(m){$("toast").textContent=m;$("toast").style.display="block";setTimeout(()=>$("toast").style.display="none",3500)}
-function showAuth(mode,btn){authMode=mode;document.querySelectorAll("#authView .tab").forEach(x=>x.classList.remove("active"));btn.classList.add("active");$("authForm").querySelector("button").textContent=mode==="login"?"Se connecter":"Créer mon compte"}
-async function api(url,opt={}){opt.headers={...(opt.headers||{}),"Content-Type":"application/json",...(token?{"Authorization":"Bearer "+token}:{})};let r=await fetch(url,opt);let d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||"Erreur");return d}
-async function loadCountries(){try{let cs=await fetch("/api/countries").then(r=>r.json());$("country").innerHTML=cs.map(c=>`<option value="${esc(c.code)}">${esc(c.name)} (${esc(c.currency)})</option>`).join("");}catch(e){}}
-async function load(){if(!token)return;try{let me=await api("/api/me");$("authView").classList.add("hidden");$("appView").classList.remove("hidden");$("balance").textContent=me.balance.toLocaleString("fr-FR");$("earned").textContent=me.total_earned.toLocaleString("fr-FR");$("ref").textContent=me.referral_code;$("phoneShow").textContent=me.phone; $("headerActions").innerHTML=`<button class="secondary" onclick="logout()">Déconnexion</button>`;if(me.role==="admin")$("headerActions").innerHTML+=` <a href="/admin" class="secondary" style="text-decoration:none">Admin</a>`;loadOffers()}catch(e){logout()}}
-async function loadOffers(){let rows=await api("/api/offers");$("offers").innerHTML=rows.length?rows.map(o=>`<article class="offer"><div class="small gold">${o.type==="game"?"JEU":"APPLICATION"}</div><h3>${esc(o.title)}</h3><p class="muted">${esc(o.description)}</p><div class="reward">+${Number(o.reward).toLocaleString("fr-FR")} FCFA</div><div class="actions"><button class="primary" onclick="startOffer(${o.id})">Tester l’offre ↗</button>${o.completion_status?`<span class="secondary">${esc(o.completion_status)}</span>`:""}</div><p class="small muted">Validation : partenaire/campagne. Aucun gain sur simple clic.</p></article>`).join(""):`<div class="card">Aucune campagne active pour le moment.</div>`}
-async function startOffer(id){try{let d=await api("/api/offers/"+id+"/start",{method:"POST"});window.open(d.campaign_url,"_blank","noopener");toast("Campagne ouverte. Attendez sa validation réelle pour recevoir le gain.")}catch(e){toast(e.message)}}
-async function loadHistory(){let rows=await api("/api/history");$("history").innerHTML=rows.length?rows.map(x=>`<div class="row"><span>${esc(x.label)}<br><small class="muted">${esc(x.created_at)}</small></span><b class="gold">+${Number(x.amount).toLocaleString("fr-FR")} FCFA</b></div>`).join(""):`<div class="card">Aucun mouvement.</div>`}
-document.querySelectorAll(".tab[data-tab]").forEach(b=>b.onclick=()=>{document.querySelectorAll(".tab[data-tab]").forEach(x=>x.classList.remove("active"));b.classList.add("active");let t=b.dataset.tab;$("offersPane").classList.toggle("hidden",t!=="offers");$("historyPane").classList.toggle("hidden",t!=="history");$("withdrawPane").classList.toggle("hidden",t!=="withdraw");if(t==="history")loadHistory();if(t==="withdraw"){loadPayoutMethods();loadWithdrawals()}});
-$("authForm").onsubmit=async e=>{e.preventDefault();try{let d=await api("/api/auth/"+(authMode==="login"?"login":"register"),{method:"POST",body:JSON.stringify({phone:$("phone").value,password:$("password").value,country_code:$("country").value})});token=d.access_token;localStorage.setItem("bz_token",token);load()}catch(x){$("authMsg").textContent=x.message}};
-function logout(){localStorage.removeItem("bz_token");token=null;location.reload()}
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Bezzy Tasks</title>
+  <meta name="theme-color" content="#07140f">
 
-async function loadPayoutMethods(){try{let d=await api("/api/payout-methods");let rows=d.methods||[];$("wmethod").innerHTML=rows.map(x=>`<option value="${x.id}">${esc(x.name)} · min ${Number(x.min_amount).toLocaleString("fr-FR")} ${esc(d.country.currency)}</option>`).join("");}catch(e){toast(e.message)}}
-async function requestVerification(){try{let d=await api("/api/verification/request",{method:"POST"});toast(d.message)}catch(e){toast(e.message)}}
-async function confirmVerification(){try{let d=await api("/api/verification/confirm",{method:"POST",body:JSON.stringify({code:$("vcode").value})});toast(d.message||"Numéro vérifié");load()}catch(e){toast(e.message)}}
-async function withdraw(){try{let d=await api("/api/payout-requests",{method:"POST",headers:{"Idempotency-Key":crypto.randomUUID?crypto.randomUUID():String(Date.now())},body:JSON.stringify({method_id:Number($("wmethod").value),account:$("waccount").value,amount:Number($("wamount").value)})});toast(d.message);load();loadWithdrawals()}catch(e){toast(e.message)}}
+  <style>
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:Arial,Helvetica,sans-serif;
+      background:#07140f;
+      color:#f5f5f5;
+    }
+    .container{
+      width:min(1100px,94%);
+      margin:auto;
+    }
+    header{
+      padding:18px 0;
+      border-bottom:1px solid #19372b;
+      background:#081b14;
+      position:sticky;
+      top:0;
+      z-index:10;
+    }
+    .header-inner{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+    }
+    .logo{
+      font-size:22px;
+      font-weight:800;
+      color:#d8ad45;
+    }
+    .header-actions{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    button,input,select{
+      font:inherit;
+    }
+    button{
+      cursor:pointer;
+    }
+    .card{
+      background:#0c2119;
+      border:1px solid #1d4434;
+      border-radius:16px;
+      padding:20px;
+      box-shadow:0 8px 30px rgba(0,0,0,.2);
+    }
+    .auth{
+      max-width:520px;
+      margin:50px auto;
+    }
+    h1,h2,h3{
+      margin-top:0;
+    }
+    .gold{
+      color:#d8ad45;
+    }
+    .muted{
+      color:#9eafa8;
+    }
+    .small{
+      font-size:13px;
+    }
+    .tabs{
+      display:flex;
+      gap:8px;
+      margin:20px 0;
+    }
+    .tab,
+    .authChoice button{
+      flex:1;
+      border:1px solid #28523f;
+      background:#0a1813;
+      color:#b9c9c2;
+      padding:11px;
+      border-radius:10px;
+    }
+    .tab.active,
+    .authChoice button.active{
+      background:#d8ad45;
+      color:#07140f;
+      border-color:#d8ad45;
+      font-weight:700;
+    }
+    .field{
+      margin:14px 0;
+    }
+    label{
+      display:block;
+      margin-bottom:7px;
+      font-weight:600;
+    }
+    input,select{
+      width:100%;
+      padding:12px;
+      border-radius:10px;
+      border:1px solid #315a48;
+      background:#07140f;
+      color:#fff;
+      outline:none;
+    }
+    input:focus,select:focus{
+      border-color:#d8ad45;
+    }
+    .primary{
+      background:#d8ad45;
+      color:#07140f;
+      border:0;
+      border-radius:10px;
+      padding:13px 16px;
+      font-weight:800;
+    }
+    .secondary{
+      background:#123024;
+      color:#fff;
+      border:1px solid #315a48;
+      border-radius:10px;
+      padding:10px 14px;
+    }
+    .danger{
+      background:#6e2424;
+      color:#fff;
+      border:0;
+      border-radius:10px;
+      padding:10px 14px;
+    }
+    .hidden{
+      display:none!important;
+    }
+    .authChoice{
+      display:flex;
+      gap:8px;
+      margin:14px 0;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns:repeat(3,1fr);
+      gap:15px;
+      margin:22px 0;
+    }
+    .stat{
+      padding:18px;
+      background:#0c2119;
+      border:1px solid #1d4434;
+      border-radius:14px;
+    }
+    .stat strong{
+      display:block;
+      font-size:24px;
+      color:#d8ad45;
+      margin-top:7px;
+    }
+    .section{
+      margin:20px 0;
+    }
+    .offer,
+    .history-item,
+    .withdraw-item{
+      background:#091a13;
+      border:1px solid #1d4434;
+      border-radius:12px;
+      padding:15px;
+      margin:10px 0;
+    }
+    .row{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .badge{
+      display:inline-block;
+      padding:5px 9px;
+      border-radius:999px;
+      background:#173d2e;
+      color:#d8ad45;
+      font-size:12px;
+    }
+    .message{
+      min-height:20px;
+      margin-top:10px;
+    }
+    .success{
+      color:#71d49a;
+    }
+    .error{
+      color:#ff8f8f;
+    }
+    @media(max-width:700px){
+      .grid{
+        grid-template-columns:1fr;
+      }
+      .header-inner{
+        align-items:flex-start;
+        flex-direction:column;
+      }
+    }
+  </style>
+</head>
 
-async function loadWithdrawals(){try{let rows=await api("/api/payout-requests");$("withdrawals").innerHTML=rows.length?rows.map(w=>`<div class="row"><span>${esc(w.method)} · ${esc(w.account)}<br><small class="muted">${esc(w.created_at)}</small></span><b>${Number(w.amount).toLocaleString("fr-FR")} ${esc(w.currency)} · ${esc(w.status)}</b></div>`).join(""):`<div class="muted">Aucune demande.</div>`}catch(e){toast(e.message)}}
-function esc(s){return String(s ?? "").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
-loadCountries();
-load();
-</script></body></html>
+<body>
+
+<header>
+  <div class="container header-inner">
+    <div class="logo">BEZZY TASKS</div>
+    <div id="headerActions" class="header-actions"></div>
+  </div>
+</header>
+
+<main class="container">
+
+  <!-- AUTHENTIFICATION -->
+  <section id="authView" class="auth card">
+
+    <h2>Bienvenue sur <span class="gold">Bezzy Tasks</span></h2>
+
+    <p class="muted">
+      Une plateforme de tâches et d'offres rémunérées,
+      avec validation réelle des campagnes partenaires.
+    </p>
+
+    <div class="tabs">
+      <button class="tab active"
+              onclick="showAuth('login',this)">
+        Connexion
+      </button>
+
+      <button class="tab"
+              onclick="showAuth('register',this)">
+        Créer un compte
+      </button>
+    </div>
+
+    <form id="authForm">
+
+      <!-- PAYS -->
+      <div class="field">
+        <label>Pays</label>
+
+        <input
+          id="countrySearch"
+          type="search"
+          placeholder="🔍 Rechercher votre pays..."
+          autocomplete="off"
+        >
+
+        <select id="country" required>
+          <option value="">Chargement des pays…</option>
+        </select>
+
+        <div id="countryCount" class="small muted"></div>
+      </div>
+
+      <!-- MODE CONTACT -->
+      <div class="authChoice">
+
+        <button
+          type="button"
+          id="phoneModeBtn"
+          class="active"
+          onclick="setContactMode('phone')">
+          📱 Téléphone
+        </button>
+
+        <button
+          type="button"
+          id="emailModeBtn"
+          onclick="setContactMode('email')">
+          📧 E-mail
+        </button>
+
+      </div>
+
+      <!-- TELEPHONE -->
+      <div class="field" id="phoneField">
+
+        <label>Numéro de téléphone</label>
+
+        <input
+          id="phone"
+          inputmode="tel"
+          autocomplete="tel"
+          placeholder="06..."
+        >
+
+      </div>
+
+      <!-- EMAIL -->
+      <div class="field hidden" id="emailField">
+
+        <label>Adresse e-mail</label>
+
+        <input
+          id="email"
+          type="email"
+          autocomplete="email"
+          placeholder="exemple@email.com"
+        >
+
+      </div>
+
+      <!-- MOT DE PASSE -->
+      <div class="field">
+
+        <label>Mot de passe</label>
+
+        <input
+          id="password"
+          type="password"
+          minlength="8"
+          autocomplete="current-password"
+          placeholder="Minimum 8 caractères"
+          required
+        >
+
+      </div>
+
+      <button
+        id="authSubmit"
+        class="primary"
+        style="width:100%"
+        type="submit">
+        Se connecter
+      </button>
+
+    </form>
+
+    <p id="authMsg" class="message muted small"></p>
+
+  </section>
+
+
+  <!-- APPLICATION -->
+  <section id="appView" class="hidden">
+
+    <div class="section">
+
+      <div class="card">
+
+        <div class="row">
+
+          <div>
+            <h2>Tableau de bord</h2>
+
+            <div class="muted small">
+              Bienvenue sur votre espace Bezzy Tasks.
+            </div>
+          </div>
+
+          <div>
+            <span id="statusBadge" class="badge">
+              Utilisateur
+            </span>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- STATISTIQUES -->
+    <div class="grid">
+
+      <div class="stat">
+        <div class="muted small">Solde disponible</div>
+        <strong id="balance">0 FCFA</strong>
+      </div>
+
+      <div class="stat">
+        <div class="muted small">Total gagné</div>
+        <strong id="totalEarned">0 FCFA</strong>
+      </div>
+
+      <div class="stat">
+        <div class="muted small">Code de parrainage</div>
+        <strong id="referralCode">—</strong>
+      </div>
+
+    </div>
+
+
+    <!-- COMPTE -->
+    <div class="section card">
+
+      <h3>Mon compte</h3>
+
+      <div class="row">
+        <span class="muted">Contact</span>
+        <strong id="phoneShow">—</strong>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <span class="muted">Pays</span>
+        <strong id="countryShow">—</strong>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <span class="muted">Statut</span>
+        <strong id="accountStatus">Actif</strong>
+      </div>
+
+    </div>
+
+
+    <!-- ONGLETS -->
+    <div class="tabs">
+
+      <button
+        class="tab active"
+        data-tab="offers">
+        🎯 Offres
+      </button>
+
+      <button
+        class="tab"
+        data-tab="history">
+        📊 Historique
+      </button>
+
+      <button
+        class="tab"
+        data-tab="withdraw">
+        💰 Retrait
+      </button>
+
+    </div>
+
+
+    <!-- OFFRES -->
+    <section id="offersTab" class="section">
+
+      <div class="card">
+
+        <h3>Offres disponibles</h3>
+
+        <div id="offers">
+          Chargement des offres…
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- HISTORIQUE -->
+    <section id="historyTab" class="section hidden">
+
+      <div class="card">
+
+        <h3>Historique des gains</h3>
+
+        <div id="history">
+          Chargement…
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- RETRAIT -->
+    <section id="withdrawTab" class="section hidden">
+
+      <div class="card">
+
+        <h3>Effectuer un retrait</h3>
+
+        <div class="field">
+
+          <label>Mode de paiement</label>
+
+          <select id="payoutMethod">
+            <option value="">Chargement…</option>
+          </select>
+
+        </div>
+
+        <div class="field">
+
+          <label>Compte / numéro de paiement</label>
+
+          <input
+            id="payoutAccount"
+            placeholder="Exemple : numéro Mobile Money"
+          >
+
+        </div>
+
+        <div class="field">
+
+          <label>Montant du retrait</label>
+
+          <input
+            id="withdrawAmount"
+            type="number"
+            min="1000"
+            max="20000"
+            step="1"
+            placeholder="Montant en FCFA"
+          >
+
+          <div class="small muted">
+            Retrait standard : 1 000 à 10 000 FCFA.
+            Les comptes Pro peuvent aller jusqu'à 20 000 FCFA.
+          </div>
+
+        </div>
+
+        <button
+          id="withdrawBtn"
+          class="primary">
+          Demander le retrait
+        </button>
+
+        <p id="withdrawMsg" class="message muted small"></p>
+
+      </div>
+
+
+      <!-- VERIFICATION -->
+      <div class="card" style="margin-top:15px">
+
+        <h3>Vérification du compte</h3>
+
+        <div id="verificationBox" class="muted">
+          Chargement…
+        </div>
+
+      </div>
+
+
+      <!-- RETRAITS -->
+      <div class="card" style="margin-top:15px">
+
+        <h3>Mes retraits</h3>
+
+        <div id="withdrawals">
+          Chargement…
+        </div>
+
+      </div>
+
+    </section>
+
+  </section>
+
+</main>
+
+
+<script>
+
+let token = localStorage.getItem("bz_token");
+let authMode = "login";
+let contactMode = "phone";
+let allCountries = [];
+
+const $ = id => document.getElementById(id);
+
+
+/* =========================
+   CONTACT MODE
+========================= */
+
+function setContactMode(mode){
+
+  contactMode = mode;
+
+  $("phoneModeBtn").classList.toggle(
+    "active",
+    mode === "phone"
+  );
+
+  $("emailModeBtn").classList.toggle(
+    "active",
+    mode === "email"
+  );
+
+  $("phoneField").classList.toggle(
+    "hidden",
+    mode !== "phone"
+  );
+
+  $("emailField").classList.toggle(
+    "hidden",
+    mode !== "email"
+  );
+
+  $("phone").required = mode === "phone";
+  $("email").required = mode === "email";
+
+}
+
+
+/* =========================
+   AUTH MODE
+========================= */
+
+function showAuth(mode,btn){
+
+  authMode = mode;
+
+  document
+    .querySelectorAll("#authView .tab")
+    .forEach(x => x.classList.remove("active"));
+
+  btn.classList.add("active");
+
+  $("authSubmit").textContent =
+    mode === "login"
+      ? "Se connecter"
+      : "Créer mon compte";
+
+  $("authMsg").textContent = "";
+
+  setContactMode(contactMode);
+
+}
+
+
+/* =========================
+   API
+========================= */
+
+async function api(url,opt={}){
+
+  opt.headers = {
+
+    ...(opt.headers || {}),
+
+    "Content-Type":"application/json",
+
+    ...(token
+      ? {"Authorization":"Bearer " + token}
+      : {})
+
+  };
+
+  const r = await fetch(url,opt);
+
+  const d = await r.json().catch(() => ({}));
+
+  if(!r.ok){
+
+    throw Error(
+      d.message ||
+      d.error ||
+      "Une erreur est survenue."
+    );
+
+  }
+
+  return d;
+
+}
+
+
+/* =========================
+   ESCAPE HTML
+========================= */
+
+function esc(value){
+
+  return String(value ?? "")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#039;");
+
+}
+
+
+/* =========================
+   COUNTRIES
+========================= */
+
+async function loadCountries(){
+
+  const select = $("country");
+
+  select.innerHTML =
+    '<option value="">Chargement des pays…</option>';
+
+  try{
+
+    const r = await fetch("/api/countries");
+
+    if(!r.ok){
+
+      throw Error(
+        "Impossible de charger les pays."
+      );
+
+    }
+
+    const cs = await r.json();
+
+    allCountries =
+      Array.isArray(cs) ? cs : [];
+
+    renderCountries(allCountries);
+
+  }catch(e){
+
+    select.innerHTML =
+      '<option value="">Pays indisponibles</option>';
+
+    $("countryCount").textContent =
+      e.message;
+
+  }
+
+}
+
+
+function renderCountries(countries){
+
+  const select = $("country");
+
+  select.innerHTML =
+    '<option value="">Sélectionnez votre pays</option>' +
+
+    countries.map(c => {
+
+      const name = esc(c.name);
+      const code = esc(c.code);
+      const currency =
+        c.currency
+          ? ` (${esc(c.currency)})`
+          : "";
+
+      return `
+        <option value="${code}">
+          ${name}${currency}
+        </option>
+      `;
+
+    }).join("");
+
+  $("countryCount").textContent =
+    `${countries.length} pays disponibles`;
+
+}
+
+
+/* =========================
+   COUNTRY SEARCH
+========================= */
+
+$("countrySearch").addEventListener(
+  "input",
+  e => {
+
+    const q =
+      e.target.value
+        .trim()
+        .toLowerCase();
+
+    if(!q){
+
+      renderCountries(allCountries);
+      return;
+
+    }
+
+    const filtered =
+      allCountries.filter(c =>
+
+        String(c.name || "")
+          .toLowerCase()
+          .includes(q)
+
+        ||
+
+        String(c.code || "")
+          .toLowerCase()
+          .includes(q)
+
+      );
+
+    renderCountries(filtered);
+
+  }
+);
+
+
+/* =========================
+   AUTH SUBMIT
+========================= */
+
+$("authForm").onsubmit = async e => {
+
+  e.preventDefault();
+
+  $("authMsg").className =
+    "message muted small";
+
+  $("authMsg").textContent =
+    "Traitement…";
+
+  try{
+
+    const email =
+      $("email").value
+        .trim()
+        .toLowerCase();
+
+    const phone =
+      $("phone").value.trim();
+
+    const password =
+      $("password").value;
+
+    const country_code =
+      $("country").value;
+
+    if(!country_code){
+
+      throw Error(
+        "Sélectionnez votre pays."
+      );
+
+    }
+
+    if(
+      contactMode === "email" &&
+      !email
+    ){
+
+      throw Error(
+        "Entrez votre adresse e-mail."
+      );
+
+    }
+
+    if(
+      contactMode === "phone" &&
+      !phone
+    ){
+
+      throw Error(
+        "Entrez votre numéro de téléphone."
+      );
+
+    }
+
+    if(password.length < 8){
+
+      throw Error(
+        "Le mot de passe doit contenir au moins 8 caractères."
+      );
+
+    }
+
+    const payload = {
+
+      password,
+
+      country_code
+
+    };
+
+
+    if(authMode === "login"){
+
+      payload.identifier =
+        contactMode === "email"
+          ? email
+          : phone;
+
+    }else{
+
+      if(email){
+        payload.email = email;
+      }
+
+      if(phone){
+        payload.phone = phone;
+      }
+
+    }
+
+
+    const d = await api(
+
+      authMode === "login"
+        ? "/api/auth/login"
+        : "/api/auth/register",
+
+      {
+        method:"POST",
+        body:JSON.stringify(payload)
+      }
+
+    );
+
+
+    token =
+      d.access_token ||
+      d.token;
+
+
+    if(!token){
+
+      throw Error(
+        "Le serveur n’a pas renvoyé de jeton de connexion."
+      );
+
+    }
+
+
+    localStorage.setItem(
+      "bz_token",
+      token
+    );
+
+
+    $("authMsg").className =
+      "message success small";
+
+    $("authMsg").textContent =
+      authMode === "login"
+        ? "Connexion réussie."
+        : "Compte créé avec succès.";
+
+
+    await load();
+
+
+  }catch(err){
+
+    $("authMsg").className =
+      "message error small";
+
+    $("authMsg").textContent =
+      err.message;
+
+  }
+
+};
+
+
+/* =========================
+   LOAD ACCOUNT
+========================= */
+
+async function load(){
+
+  if(!token){
+
+    $("authView").classList.remove("hidden");
+    $("appView").classList.add("hidden");
+
+    return;
+
+  }
+
+
+  try{
+
+    const me = await api("/api/me");
+
+
+    $("authView").classList.add("hidden");
+    $("appView").classList.remove("hidden");
+
+
+    $("balance").textContent =
+      formatMoney(
+        me.balance ??
+        me.available_balance ??
+        0
+      );
+
+
+    $("totalEarned").textContent =
+      formatMoney(
+        me.total_earned ??
+        me.totalEarned ??
+        0
+      );
+
+
+    $("referralCode").textContent =
+      me.referral_code ||
+      me.referralCode ||
+      "—";
+
+
+    $("phoneShow").textContent =
+      me.email ||
+      me.phone ||
+      "—";
+
+
+    $("countryShow").textContent =
+      me.country_name ||
+      me.country_code ||
+      "—";
+
+
+    $("accountStatus").textContent =
+      me.status ||
+      "Actif";
+
+
+    const role =
+      String(me.role || "")
+        .toUpperCase();
+
+
+    $("statusBadge").textContent =
+      role === "ADMIN" ||
+      role === "SUPER_ADMIN"
+        ? "Administrateur"
+        : "Utilisateur";
+
+
+    $("headerActions").innerHTML = "";
+
+
+    if(
+      role === "ADMIN" ||
+      role === "SUPER_ADMIN"
+    ){
+
+      $("headerActions").innerHTML += `
+        <a
+          href="/admin"
+          class="secondary"
+          style="text-decoration:none">
+          Admin
+        </a>
+      `;
+
+    }
+
+
+    $("headerActions").innerHTML += `
+      <button
+        class="danger"
+        onclick="logout()">
+        Déconnexion
+      </button>
+    `;
+
+
+    await Promise.all([
+
+      loadOffers(),
+
+      loadHistory(),
+
+      loadPayoutMethods(),
+
+      loadWithdrawals(),
+
+      loadVerification()
+
+    ]);
+
+
+  }catch(err){
+
+    console.error(err);
+
+    logout();
+
+  }
+
+}
+
+
+/* =========================
+   MONEY
+========================= */
+
+function formatMoney(value){
+
+  const n =
+    Number(value || 0);
+
+  return n.toLocaleString(
+    "fr-FR"
+  ) + " FCFA";
+
+}
+
+
+/* =========================
+   OFFERS
+========================= */
+
+async function loadOffers(){
+
+  const box = $("offers");
+
+  try{
+
+    const data =
+      await api("/api/offers");
+
+    const offers =
+      Array.isArray(data)
+        ? data
+        : data.offers || [];
+
+
+    if(!offers.length){
+
+      box.innerHTML =
+        '<p class="muted">Aucune offre disponible pour le moment.</p>';
+
+      return;
+
+    }
+
+
+    box.innerHTML =
+      offers.map(o => `
+
+        <div class="offer">
+
+          <div class="row">
+
+            <div>
+
+              <strong>
+                ${esc(
+                  o.title ||
+                  o.name ||
+                  "Offre"
+                )}
+              </strong>
+
+              <div class="muted small">
+                ${esc(
+                  o.description ||
+                  "Effectuez cette tâche pour recevoir votre récompense."
+                )}
+              </div>
+
+            </div>
+
+            <span class="badge">
+              ${formatMoney(
+                o.reward ??
+                o.amount ??
+                0
+              )}
+            </span>
+
+          </div>
+
+          <button
+            class="primary"
+            style="margin-top:12px"
+            onclick="startOffer('${esc(o.id || o.offer_id || "")}')">
+            Commencer
+          </button>
+
+        </div>
+
+      `).join("");
+
+
+  }catch(e){
+
+    box.innerHTML =
+      `<p class="error">${esc(e.message)}</p>`;
+
+  }
+
+}
+
+
+async function startOffer(id){
+
+  if(!id){
+
+    alert(
+      "Cette offre ne possède pas d'identifiant valide."
+    );
+
+    return;
+
+  }
+
+
+  try{
+
+    const d
 
 
 
