@@ -66,12 +66,10 @@
 
   <form id="authForm" novalidate>
     <div class="field">
-      <label for="countrySearch">Pays</label>
-      <input id="countrySearch" type="search" placeholder="🔍 Rechercher votre pays..." autocomplete="off">
+      <label for="country">Pays</label>
       <select id="country" required>
         <option value="">Chargement des pays...</option>
       </select>
-      <div id="countryCount" class="small muted"></div>
       <div id="countryInfo" class="country-info small muted">Sélectionnez votre pays.</div>
     </div>
 
@@ -263,8 +261,7 @@ function renderCountries(countries){
   const previous=select.value;
   select.innerHTML="";
   if(!countries.length){
-    select.innerHTML='<option value="">Aucun pays trouvé</option>';
-    $("countryCount").textContent="";
+    select.innerHTML='<option value="">Aucun pays disponible</option>';
     return;
   }
   const fragment=document.createDocumentFragment();
@@ -275,7 +272,6 @@ function renderCountries(countries){
     fragment.appendChild(option);
   });
   select.appendChild(fragment);
-  $("countryCount").textContent=`${countries.length} pays disponible(s)`;
   if(previous && countries.some(c=>c.code===previous))select.value=previous;
 }
 
@@ -307,27 +303,8 @@ async function loadCountries(){
   }catch(error){
     console.error("Erreur pays:",error);
     select.innerHTML='<option value="">Erreur de chargement</option>';
-    $("countryCount").textContent="Impossible de charger les pays.";
     $("countryInfo").textContent=error.message;
   }
-}
-
-function filterCountries(){
-  const query=$("countrySearch").value.trim().toLowerCase();
-  if(!query){
-    renderCountries(allCountries);
-    updateCountryInfo();
-    return;
-  }
-  const filtered=allCountries.filter(country=>{
-    const name=String(country.name||"").toLowerCase();
-    const code=String(country.code||"").toLowerCase();
-    const dial=String(country.dial_code||"").toLowerCase();
-    return name.includes(query)||code.includes(query)||dial.includes(query);
-  });
-  renderCountries(filtered);
-  if(filtered.length)$("country").value=filtered[0].code;
-  updateCountryInfo();
 }
 
 async function submitAuth(event){
@@ -512,4 +489,31 @@ async function loadHistory(){
       return `<div class="history-item"><div class="row"><strong>${esc(title)}</strong><span class="badge">${esc(status)}</span></div><div class="muted small">Gain : ${esc(money(reward))}</div></div>`;
     }).join("");
   }catch(error){
-    box.innerHTML=`<p class
+    box.innerHTML=`<p class="error">${esc(error.message)}</p>`;
+  }
+}
+
+async function loadPayoutMethods(){
+  const select=$("payoutMethod");
+  try{
+    const data=await api("/api/payout-methods");
+    const methods=Array.isArray(data)?data:(Array.isArray(data.methods)?data.methods:(Array.isArray(data.payout_methods)?data.payout_methods:[]));
+    select.innerHTML='<option value="">Sélectionner un mode</option>';
+    methods.forEach(method=>{
+      const id=pick(method,"id","code","value");
+      const name=pick(method,"name","label","title")||id;
+      if(id!==null){
+        const option=document.createElement("option");
+        option.value=id;
+        option.textContent=name;
+        select.appendChild(option);
+      }
+    });
+    if(!methods.length)select.innerHTML='<option value="">Aucun mode disponible</option>';
+  }catch(error){
+    select.innerHTML='<option value="">Erreur de chargement</option>';
+  }
+}
+
+async function loadWithdrawals(){
+  const b
