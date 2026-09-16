@@ -1188,22 +1188,530 @@ async function loadOffers(){
 }
 
 
+<script>
+
 async function startOffer(id){
 
   if(!id){
-
-    alert(
-      "Cette offre ne possède pas d'identifiant valide."
-    );
-
+    alert("Cette offre ne possède pas d'identifiant valide.");
     return;
-
   }
-
 
   try{
 
-    const d
+    const d = await api(
+      "/api/offers/" + encodeURIComponent(id) + "/start",
+      {
+        method:"POST"
+      }
+    );
+
+    if(d.url){
+      window.location.href = d.url;
+      return;
+    }
+
+    if(d.redirect_url){
+      window.location.href = d.redirect_url;
+      return;
+    }
+
+    if(d.message){
+      alert(d.message);
+    }else{
+      alert("Offre démarrée avec succès.");
+    }
+
+    await load();
+
+  }catch(e){
+
+    alert(e.message || "Impossible de démarrer cette offre.");
+
+  }
+
+}
+
+
+/* =========================
+   HISTORY
+========================= */
+
+async function loadHistory(){
+
+  const box = $("history");
+
+  try{
+
+    const data = await api("/api/history");
+
+    const items =
+      Array.isArray(data)
+        ? data
+        : (
+            data.history ||
+            data.items ||
+            data.transactions ||
+            []
+          );
+
+    if(!items.length){
+
+      box.innerHTML =
+        '<p class="muted">Aucun gain enregistré pour le moment.</p>';
+
+      return;
+
+    }
+
+    box.innerHTML =
+      items.map(item => {
+
+        const title =
+          item.title ||
+          item.name ||
+          item.description ||
+          "Gain";
+
+        const amount =
+          item.amount ??
+          item.reward ??
+          item.reward_amount ??
+          0;
+
+        const status =
+          item.status ||
+          item.state ||
+          "Terminé";
+
+        const date =
+          item.created_at ||
+          item.createdAt ||
+          item.date ||
+          "";
+
+        return `
+          <div class="history-item">
+
+            <div class="row">
+
+              <div>
+                <strong>${esc(title)}</strong>
+
+                ${
+                  date
+                    ? `
+                      <div class="muted small">
+                        ${esc(date)}
+                      </div>
+                    `
+                    : ""
+                }
+
+              </div>
+
+              <span class="badge">
+                ${formatMoney(amount)}
+              </span>
+
+            </div>
+
+            <div class="muted small" style="margin-top:8px">
+              Statut : ${esc(status)}
+            </div>
+
+          </div>
+        `;
+
+      }).join("");
+
+  }catch(e){
+
+    box.innerHTML =
+      `<p class="error">${esc(e.message)}</p>`;
+
+  }
+
+}
+
+
+/* =========================
+   PAYOUT METHODS
+========================= */
+
+async function loadPayoutMethods(){
+
+  const select = $("payoutMethod");
+
+  try{
+
+    const data = await api("/api/payout-methods");
+
+    const methods =
+      Array.isArray(data)
+        ? data
+        : (
+            data.methods ||
+            data.payout_methods ||
+            data.payoutMethods ||
+            []
+          );
+
+    if(!methods.length){
+
+      select.innerHTML =
+        '<option value="">Aucun mode disponible</option>';
+
+      return;
+
+    }
+
+    select.innerHTML =
+      '<option value="">Sélectionnez un mode</option>' +
+
+      methods.map(method => {
+
+        const id =
+          method.id ||
+          method.code ||
+          method.value ||
+          "";
+
+        const name =
+          method.name ||
+          method.label ||
+          method.title ||
+          id;
+
+        return `
+          <option value="${esc(id)}">
+            ${esc(name)}
+          </option>
+        `;
+
+      }).join("");
+
+  }catch(e){
+
+    select.innerHTML =
+      '<option value="">Mode indisponible</option>';
+
+    console.error("Payout methods:",e);
+
+  }
+
+}
+
+
+/* =========================
+   WITHDRAWALS
+========================= */
+
+async function loadWithdrawals(){
+
+  const box = $("withdrawals");
+
+  try{
+
+    const data = await api("/api/withdrawals");
+
+    const items =
+      Array.isArray(data)
+        ? data
+        : (
+            data.withdrawals ||
+            data.items ||
+            []
+          );
+
+    if(!items.length){
+
+      box.innerHTML =
+        '<p class="muted">Aucun retrait effectué pour le moment.</p>';
+
+      return;
+
+    }
+
+    box.innerHTML =
+      items.map(item => {
+
+        const amount =
+          item.amount ??
+          item.requested_amount ??
+          item.withdrawal_amount ??
+          0;
+
+        const fee =
+          item.fee ??
+          item.withdrawal_fee ??
+          0;
+
+        const status =
+          item.status ||
+          "En attente";
+
+        const method =
+          item.method_name ||
+          item.payout_method ||
+          item.method ||
+          "—";
+
+        const account =
+          item.account ||
+          item.account_number ||
+          item.phone ||
+          "—";
+
+        const date =
+          item.created_at ||
+          item.createdAt ||
+          item.date ||
+          "";
+
+        return `
+          <div class="withdraw-item">
+
+            <div class="row">
+
+              <strong>
+                ${formatMoney(amount)}
+              </strong>
+
+              <span class="badge">
+                ${esc(status)}
+              </span>
+
+            </div>
+
+            <div class="muted small" style="margin-top:8px">
+              Mode : ${esc(method)}
+            </div>
+
+            <div class="muted small">
+              Compte : ${esc(account)}
+            </div>
+
+            <div class="muted small">
+              Frais : ${formatMoney(fee)}
+            </div>
+
+            ${
+              date
+                ? `
+                  <div class="muted small">
+                    Date : ${esc(date)}
+                  </div>
+                `
+                : ""
+            }
+
+          </div>
+        `;
+
+      }).join("");
+
+  }catch(e){
+
+    box.innerHTML =
+      `<p class="error">${esc(e.message)}</p>`;
+
+  }
+
+}
+
+
+/* =========================
+   VERIFICATION
+========================= */
+
+async function loadVerification(){
+
+  const box = $("verificationBox");
+
+  try{
+
+    const data = await api("/api/verification");
+
+    const status =
+      data.status ||
+      data.verification_status ||
+      data.state ||
+      "non vérifié";
+
+    const verified =
+      data.verified === true ||
+      String(status).toLowerCase() === "verified" ||
+      String(status).toLowerCase() === "approved";
+
+    box.innerHTML = `
+
+      <div class="row">
+
+        <div>
+          <strong>
+            ${
+              verified
+                ? "Compte vérifié"
+                : "Compte non vérifié"
+            }
+          </strong>
+
+          <div class="muted small" style="margin-top:5px">
+            Statut : ${esc(status)}
+          </div>
+        </div>
+
+        <span class="badge">
+          ${
+            verified
+              ? "✓ Vérifié"
+              : "À vérifier"
+          }
+        </span>
+
+      </div>
+
+    `;
+
+  }catch(e){
+
+    box.innerHTML = `
+      <p class="muted">
+        La vérification du compte sera disponible prochainement.
+      </p>
+    `;
+
+    console.error("Verification:",e);
+
+  }
+
+}
+
+
+/* =========================
+   WITHDRAW
+========================= */
+
+async function requestWithdrawal(){
+
+  const method =
+    $("payoutMethod").value;
+
+  const account =
+    $("payoutAccount").value.trim();
+
+  const amount =
+    Number($("withdrawAmount").value);
+
+  const msg =
+    $("withdrawMsg");
+
+  msg.className =
+    "message muted small";
+
+  msg.textContent =
+    "Traitement du retrait…";
+
+  try{
+
+    if(!method){
+
+      throw Error(
+        "Sélectionnez un mode de paiement."
+      );
+
+    }
+
+    if(!account){
+
+      throw Error(
+        "Entrez votre compte ou numéro de paiement."
+      );
+
+    }
+
+    if(!Number.isFinite(amount)){
+
+      throw Error(
+        "Entrez un montant valide."
+      );
+
+    }
+
+    if(amount < 1000){
+
+      throw Error(
+        "Le montant minimum de retrait est de 1 000 FCFA."
+      );
+
+    }
+
+    if(amount > 20000){
+
+      throw Error(
+        "Le montant maximum autorisé est de 20 000 FCFA."
+      );
+
+    }
+
+    const data = await api(
+      "/api/withdrawals",
+      {
+        method:"POST",
+        body:JSON.stringify({
+
+          amount,
+
+          payout_method:method,
+
+          payout_account:account
+
+        })
+      }
+    );
+
+    msg.className =
+      "message success small";
+
+    msg.textContent =
+      data.message ||
+      "Votre demande de retrait a été enregistrée.";
+
+    $("payoutAccount").value = "";
+    $("withdrawAmount").value = "";
+
+    await Promise.all([
+      load(),
+      loadWithdrawals()
+    ]);
+
+  }catch(e){
+
+    msg.className =
+      "message error small";
+
+    msg.textContent =
+      e.message ||
+      "Impossible d'effectuer le retrait.";
+
+  }
+
+}
+
+
+/* =========================
+   LOGOUT
+========================= */
+
+function logout(){
+
+  token = null;
+
+  localStorage.removeItem("bz_token");
+
+  $("appView").classList.add("hidden");
+  $("authView").classList.remove("hidden
 
 
 
