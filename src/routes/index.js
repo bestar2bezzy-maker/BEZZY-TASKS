@@ -1719,11 +1719,12 @@ router.post('/auth/login', async (req, res, next) => {
   try {
 
     const {
-      identifier,
-      email,
-      phone,
-      password
-    } = req.body || {};
+  identifier,
+  email,
+  phone,
+  country_code = 'CG',
+  password
+} = req.body || {};
 
     /*
      * Compatibilité avec plusieurs noms de champs.
