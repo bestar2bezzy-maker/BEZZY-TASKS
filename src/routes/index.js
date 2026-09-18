@@ -1109,7 +1109,448 @@ router.post('/auth/register', async (req, res, next) => {
 
 
       return res.status(503).json({
-        error: 'VERIFICATION_EMAIL_FAI
+        LED',
+        message:
+          'Impossible d’envoyer l’e-mail de vérification. Veuillez réessayer plus tard.'
+      });
+    }
+
+
+    /*
+
+     * ========================================================
+     * REPONSE INSCRIPTION
+     * ========================================================
+     */
+
+    return res.status(201).json({
+      success: true,
+      email_verification_required: true,
+      user: {
+        id: userId,
+        email: normalizedEmail,
+        phone: internationalPhone,
+        country_code: countryCode,
+        email_verified: false
+      },
+      message:
+        'Compte créé. Veuillez vérifier votre adresse e-mail pour activer votre compte.'
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
+
+/*
+ * ============================================================
+ * VERIFY EMAIL
+ * ============================================================
+ *
+ * Le lien reçu par e-mail arrive ici :
+ *
+ * /api/auth/verify-email?token=...
+ *
+ * Le token brut n'est jamais stocké en base.
+ */
+
+router.get('/auth/verify-email', (req, res, next) => {
+  try {
+
+    const token = String(
+      req.query.token || ''
+    ).trim();
+
+    if (!token) {
+      return res.status(400).send(`
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Vérification Bezzy Tasks</title>
+</head>
+
+<body style="
+  margin:0;
+  padding:40px 20px;
+  background:#f4f6f8;
+  font-family:Arial,Helvetica,sans-serif;
+">
+
+  <div style="
+    max-width:600px;
+    margin:0 auto;
+    background:#ffffff;
+    padding:32px;
+    border-radius:14px;
+    text-align:center;
+  ">
+
+    <h1>Bezzy Tasks</h1>
+
+    <h2>Lien de vérification invalide</h2>
+
+    <p>
+      Aucun token de vérification valide n'a été fourni.
+    </p>
+
+  </div>
+
+</body>
+</html>
+      `);
+    }
+
+
+    /*
+     * ========================================================
+     * HASH DU TOKEN
+     * ========================================================
+     */
+
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(token)
+      .digest('hex');
+
+
+    const db = getDb();
+
+
+    /*
+     * ========================================================
+     * RECHERCHE DU TOKEN
+     * ========================================================
+     */
+
+    const verificationToken = db.prepare(`
+      SELECT
+        id,
+        user_id,
+        token_hash,
+        expires_at,
+        used_at
+      FROM email_verification_tokens
+      WHERE token_hash = ?
+      LIMIT 1
+    `).get(tokenHash);
+
+
+    /*
+     * Token inexistant.
+     */
+
+    if (!verificationToken) {
+      return res.status(400).send(`
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Vérification Bezzy Tasks</title>
+</head>
+
+<body style="
+  margin:0;
+  padding:40px 20px;
+  background:#f4f6f8;
+  font-family:Arial,Helvetica,sans-serif;
+">
+
+  <div style="
+    max-width:600px;
+    margin:0 auto;
+    background:#ffffff;
+    padding:32px;
+    border-radius:14px;
+    text-align:center;
+  ">
+
+    <h1>Bezzy Tasks</h1>
+
+    <h2>Lien invalide</h2>
+
+    <p>
+      Ce lien de vérification n'est pas valide.
+    </p>
+
+  </div>
+
+</body>
+</html>
+      `);
+    }
+
+
+    /*
+     * Token déjà utilisé.
+     */
+
+    if (verificationToken.used_at) {
+      return res.status(200).send(`
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Bezzy Tasks</title>
+</head>
+
+<body style="
+  margin:0;
+  padding:40px 20px;
+  background:#f4f6f8;
+  font-family:Arial,Helvetica,sans-serif;
+">
+
+  <div style="
+    max-width:600px;
+    margin:0 auto;
+    background:#ffffff;
+    padding:32px;
+    border-radius:14px;
+    text-align:center;
+  ">
+
+    <h1>Bezzy Tasks</h1>
+
+    <h2>E-mail déjà vérifié</h2>
+
+    <p>
+      Cette adresse e-mail a déjà été vérifiée.
+    </p>
+
+    <p>
+      Vous pouvez maintenant vous connecter à votre compte.
+    </p>
+
+  </div>
+
+</body>
+</html>
+      `);
+    }
+
+
+    /*
+     * ========================================================
+     * EXPIRATION
+     * ========================================================
+     */
+
+    const expiresAt =
+      new Date(verificationToken.expires_at);
+
+    if (
+      Number.isNaN(expiresAt.getTime()) ||
+      expiresAt.getTime() < Date.now()
+    ) {
+      return res.status(400).send(`
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Bezzy Tasks</title>
+</head>
+
+<body style="
+  margin:0;
+  padding:40px 20px;
+  background:#f4f6f8;
+  font-family:Arial,Helvetica,sans-serif;
+">
+
+  <div style="
+    max-width:600px;
+    margin:0 auto;
+    background:#ffffff;
+    padding:32px;
+    border-radius:14px;
+    text-align:center;
+  ">
+
+    <h1>Bezzy Tasks</h1>
+
+    <h2>Lien expiré</h2>
+
+    <p>
+      Ce lien de vérification a expiré.
+    </p>
+
+    <p>
+      Demandez un nouveau lien depuis la page de connexion.
+    </p>
+
+  </div>
+
+</body>
+</html>
+      `);
+    }
+
+
+    /*
+     * ========================================================
+     * VERIFICATION DU COMPTE
+     * ========================================================
+     */
+
+    const verifyTransaction = db.transaction(() => {
+
+      const user = db.prepare(`
+        SELECT
+          id,
+          email_verified_at
+        FROM users
+        WHERE id = ?
+        LIMIT 1
+      `).get(verificationToken.user_id);
+
+
+      if (!user) {
+        throw new Error('USER_NOT_FOUND');
+      }
+
+
+      /*
+       * Si le compte était déjà vérifié,
+       * on marque simplement le token comme utilisé.
+       */
+
+      if (!user.email_verified_at) {
+
+        db.prepare(`
+          UPDATE users
+          SET email_verified_at = ?
+          WHERE id = ?
+        `).run(
+          new Date().toISOString(),
+          user.id
+        );
+
+      }
+
+
+      db.prepare(`
+        UPDATE email_verification_tokens
+        SET used_at = ?
+        WHERE id = ?
+          AND used_at IS NULL
+      `).run(
+        new Date().toISOString(),
+        verificationToken.id
+      );
+
+    });
+
+
+    verifyTransaction();
+
+
+    /*
+     * ========================================================
+     * REPONSE SUCCES
+     * ========================================================
+     */
+
+    return res.status(200).send(`
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta
+    name="viewport"
+    content="width=device-width,initial-scale=1.0"
+  >
+  <title>Bezzy Tasks — E-mail vérifié</title>
+</head>
+
+<body style="
+  margin:0;
+  padding:40px 20px;
+  background:#f4f6f8;
+  font-family:Arial,Helvetica,sans-serif;
+">
+
+  <div style="
+    max-width:600px;
+    margin:0 auto;
+    background:#ffffff;
+    padding:40px 30px;
+    border-radius:14px;
+    text-align:center;
+    box-shadow:0 4px 20px rgba(0,0,0,0.08);
+  ">
+
+    <h1 style="
+      margin-top:0;
+      color:#111827;
+    ">
+      Bezzy Tasks
+    </h1>
+
+    <div style="
+      font-size:48px;
+      margin:20px 0;
+    ">
+      ✓
+    </div>
+
+    <h2 style="
+      color:#111827;
+    ">
+      Adresse e-mail vérifiée
+    </h2>
+
+    <p style="
+      font-size:16px;
+      line-height:1.6;
+      color:#444;
+    ">
+      Votre adresse e-mail a été vérifiée avec succès.
+    </p>
+
+    <p style="
+      font-size:16px;
+      line-height:1.6;
+      color:#444;
+    ">
+      Votre compte Bezzy Tasks est maintenant activé.
+    </p>
+
+    <p style="
+      margin-top:30px;
+      font-size:14px;
+      color:#777;
+    ">
+      Vous pouvez retourner sur Bezzy Tasks et vous connecter.
+    </p>
+
+  </div>
+
+</body>
+</html>
+    `);
+
+  } catch (error) {
+    next(error);
+  }
+});
+
+
+/*
+ * ============================================================
+ * FIN DE LA PARTIE 1
+ * ============================================================
+ *
+ * La PARTIE 2 commence ensuite avec :
+ *
+ * POST /auth/resend-verification
+ *
+ */
 
         /*
  * ============================================================
