@@ -1109,8 +1109,8 @@ router.post('/auth/register', async (req, res, next) => {
 
 
       return res.status(503).json({
-        LED',
-        message:
+  error: 'VERIFICATION_EMAIL_FAILED',
+  message:
           'Impossible d’envoyer l’e-mail de vérification. Veuillez réessayer plus tard.'
       });
     }
