@@ -5,48 +5,282 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Bezzy Tasks</title>
   <meta name="theme-color" content="#07140f">
+
   <style>
     *{box-sizing:border-box}
-    body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#07140f;color:#f5f5f5}
-    .container{width:min(1100px,94%);margin:auto}
-    header{padding:18px 0;border-bottom:1px solid #19372b;background:#081b14;position:sticky;top:0;z-index:10}
-    .header-inner{display:flex;align-items:center;justify-content:space-between;gap:12px}
-    .logo{font-size:22px;font-weight:800;color:#d8ad45}
-    .header-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    button,input,select{font:inherit}
-    button{cursor:pointer}
-    .card{background:#0c2119;border:1px solid #1d4434;border-radius:16px;padding:20px;box-shadow:0 8px 30px rgba(0,0,0,.2)}
-    .auth{max-width:560px;margin:50px auto}
-    h1,h2,h3{margin-top:0}
-    .gold{color:#d8ad45}.muted{color:#9eafa8}.small{font-size:13px}
-    .tabs{display:flex;gap:8px;margin:20px 0}
-    .tab,.authChoice button{flex:1;border:1px solid #28523f;background:#0a1813;color:#b9c9c2;padding:11px;border-radius:10px}
-    .tab.active,.authChoice button.active{background:#d8ad45;color:#07140f;border-color:#d8ad45;font-weight:700}
-    .field{margin:14px 0}
-    label{display:block;margin-bottom:7px;font-weight:600}
-    input,select{width:100%;padding:12px;border-radius:10px;border:1px solid #315a48;background:#07140f;color:#fff;outline:none}
-    input:focus,select:focus{border-color:#d8ad45}
-    .primary{background:#d8ad45;color:#07140f;border:0;border-radius:10px;padding:13px 16px;font-weight:800}
-    .secondary{background:#123024;color:#fff;border:1px solid #315a48;border-radius:10px;padding:10px 14px}
-    .danger{background:#6e2424;color:#fff;border:0;border-radius:10px;padding:10px 14px}
-    .hidden{display:none!important}
-    .authChoice{display:flex;gap:8px;margin:14px 0}
-    .phone-line{display:grid;grid-template-columns:145px 1fr;gap:8px}
-    .dial-code{font-weight:700;text-align:center;background:#10291f}
-    .country-info{margin-top:7px;padding:9px 11px;border-radius:8px;background:#10291f;border:1px solid #1d4434}
-    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;margin:22px 0}
-    .stat{padding:18px;background:#0c2119;border:1px solid #1d4434;border-radius:14px}
-    .stat strong{display:block;font-size:24px;color:#d8ad45;margin-top:7px}
-    .section{margin:20px 0}
-    .offer,.history-item,.withdraw-item{background:#091a13;border:1px solid #1d4434;border-radius:12px;padding:15px;margin:10px 0}
-    .row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
-    .badge{display:inline-block;padding:5px 9px;border-radius:999px;background:#173d2e;color:#d8ad45;font-size:12px}
-    .message{min-height:20px;margin-top:10px}.success{color:#71d49a}.error{color:#ff8f8f}.loading{opacity:.7}
-    .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+
+    body{
+      margin:0;
+      font-family:Arial,Helvetica,sans-serif;
+      background:#07140f;
+      color:#f5f5f5
+    }
+
+    .container{
+      width:min(1100px,94%);
+      margin:auto
+    }
+
+    header{
+      padding:18px 0;
+      border-bottom:1px solid #19372b;
+      background:#081b14;
+      position:sticky;
+      top:0;
+      z-index:10
+    }
+
+    .header-inner{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px
+    }
+
+    .logo{
+      font-size:22px;
+      font-weight:800;
+      color:#d8ad45
+    }
+
+    .header-actions{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      flex-wrap:wrap
+    }
+
+    button,input,select{
+      font:inherit
+    }
+
+    button{
+      cursor:pointer
+    }
+
+    .card{
+      background:#0c2119;
+      border:1px solid #1d4434;
+      border-radius:16px;
+      padding:20px;
+      box-shadow:0 8px 30px rgba(0,0,0,.2)
+    }
+
+    .auth{
+      max-width:560px;
+      margin:50px auto
+    }
+
+    h1,h2,h3{
+      margin-top:0
+    }
+
+    .gold{
+      color:#d8ad45
+    }
+
+    .muted{
+      color:#9eafa8
+    }
+
+    .small{
+      font-size:13px
+    }
+
+    .tabs{
+      display:flex;
+      gap:8px;
+      margin:20px 0
+    }
+
+    .tab,
+    .authChoice button{
+      flex:1;
+      border:1px solid #28523f;
+      background:#0a1813;
+      color:#b9c9c2;
+      padding:11px;
+      border-radius:10px
+    }
+
+    .tab.active,
+    .authChoice button.active{
+      background:#d8ad45;
+      color:#07140f;
+      border-color:#d8ad45;
+      font-weight:700
+    }
+
+    .field{
+      margin:14px 0
+    }
+
+    label{
+      display:block;
+      margin-bottom:7px;
+      font-weight:600
+    }
+
+    input,
+    select{
+      width:100%;
+      padding:12px;
+      border-radius:10px;
+      border:1px solid #315a48;
+      background:#07140f;
+      color:#fff;
+      outline:none
+    }
+
+    input:focus,
+    select:focus{
+      border-color:#d8ad45
+    }
+
+    .primary{
+      background:#d8ad45;
+      color:#07140f;
+      border:0;
+      border-radius:10px;
+      padding:13px 16px;
+      font-weight:800
+    }
+
+    .secondary{
+      background:#123024;
+      color:#fff;
+      border:1px solid #315a48;
+      border-radius:10px;
+      padding:10px 14px
+    }
+
+    .danger{
+      background:#6e2424;
+      color:#fff;
+      border:0;
+      border-radius:10px;
+      padding:10px 14px
+    }
+
+    .hidden{
+      display:none!important
+    }
+
+    .authChoice{
+      display:flex;
+      gap:8px;
+      margin:14px 0
+    }
+
+    .phone-line{
+      display:grid;
+      grid-template-columns:145px 1fr;
+      gap:8px
+    }
+
+    .dial-code{
+      font-weight:700;
+      text-align:center;
+      background:#10291f
+    }
+
+    .country-info{
+      margin-top:7px;
+      padding:9px 11px;
+      border-radius:8px;
+      background:#10291f;
+      border:1px solid #1d4434
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns:repeat(3,1fr);
+      gap:15px;
+      margin:22px 0
+    }
+
+    .stat{
+      padding:18px;
+      background:#0c2119;
+      border:1px solid #1d4434;
+      border-radius:14px
+    }
+
+    .stat strong{
+      display:block;
+      font-size:24px;
+      color:#d8ad45;
+      margin-top:7px
+    }
+
+    .section{
+      margin:20px 0
+    }
+
+    .offer,
+    .history-item,
+    .withdraw-item{
+      background:#091a13;
+      border:1px solid #1d4434;
+      border-radius:12px;
+      padding:15px;
+      margin:10px 0
+    }
+
+    .row{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      flex-wrap:wrap
+    }
+
+    .badge{
+      display:inline-block;
+      padding:5px 9px;
+      border-radius:999px;
+      background:#173d2e;
+      color:#d8ad45;
+      font-size:12px
+    }
+
+    .message{
+      min-height:20px;
+      margin-top:10px
+    }
+
+    .success{
+      color:#71d49a
+    }
+
+    .error{
+      color:#ff8f8f
+    }
+
+    .loading{
+      opacity:.7
+    }
+
+    .actions{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      margin-top:12px
+    }
+
     @media(max-width:700px){
-      .grid{grid-template-columns:1fr}
-      .header-inner{align-items:flex-start;flex-direction:column}
-      .phone-line{grid-template-columns:120px 1fr}
+      .grid{
+        grid-template-columns:1fr
+      }
+
+      .header-inner{
+        align-items:flex-start;
+        flex-direction:column
+      }
+
+      .phone-line{
+        grid-template-columns:120px 1fr
+      }
     }
   </style>
 </head>
@@ -62,392 +296,543 @@
 
 <main class="container">
 
-<section id="authView" class="auth card">
+  <!-- =========================
+       AUTHENTIFICATION
+  ========================== -->
 
-  <h2>Bienvenue sur <span class="gold">Bezzy Tasks</span></h2>
+  <section id="authView" class="auth card">
 
-  <p class="muted">
-    Une plateforme de tâches et d'offres rémunérées.
-  </p>
+    <h2>
+      Bienvenue sur
+      <span class="gold">Bezzy Tasks</span>
+    </h2>
 
-  <div class="tabs">
-    <button id="loginTab" class="tab active" type="button">
-      Connexion
-    </button>
+    <p class="muted">
+      Une plateforme de tâches et d'offres rémunérées.
+    </p>
 
-    <button id="registerTab" class="tab" type="button">
-      Créer un compte
-    </button>
-  </div>
-
-  <form id="authForm" novalidate>
-
-    <div class="field">
-
-      <label for="countrySearch">Pays</label>
-
-      <input
-        id="countrySearch"
-        type="search"
-        placeholder="🔍 Rechercher votre pays..."
-        autocomplete="off"
-      >
-
-      <select id="country" required>
-        <option value="">Chargement des pays...</option>
-      </select>
-
-      <div id="countryCount" class="small muted"></div>
-
-      <div id="countryInfo" class="country-info small muted">
-        Sélectionnez votre pays.
-      </div>
-
-    </div>
-
-    <div class="authChoice">
+    <div class="tabs">
 
       <button
+        id="loginTab"
+        class="tab active"
         type="button"
-        id="phoneModeBtn"
-        class="active"
       >
-        📱 Téléphone
+        Connexion
       </button>
 
       <button
+        id="registerTab"
+        class="tab"
         type="button"
-        id="emailModeBtn"
       >
-        📧 E-mail
+        Créer un compte
       </button>
 
     </div>
 
-    <div class="field" id="phoneField">
+    <form id="authForm" novalidate>
 
-      <label for="phone">
-        Numéro de téléphone
-      </label>
-
-      <div class="phone-line">
-
-        <input
-          id="dialCode"
-          class="dial-code"
-          value="+242"
-          readonly
-          aria-label="Indicatif du pays"
-        >
-
-        <input
-          id="phone"
-          type="tel"
-          inputmode="tel"
-          autocomplete="tel"
-          placeholder="06 123 45 67"
-        >
-
-      </div>
-
-      <div class="small muted">
-        L'indicatif est ajouté automatiquement selon le pays.
-      </div>
-
-    </div>
-
-    <div class="field hidden" id="emailField">
-
-      <label for="email">
-        Adresse e-mail
-      </label>
-
-      <input
-        id="email"
-        type="email"
-        inputmode="email"
-        autocomplete="email"
-        placeholder="exemple@email.com"
-      >
-
-    </div>
-
-    <div class="field">
-
-      <label for="password">
-        Mot de passe
-      </label>
-
-      <input
-        id="password"
-        type="password"
-        minlength="8"
-        autocomplete="current-password"
-        placeholder="Minimum 8 caractères"
-        required
-      >
-
-    </div>
-
-    <button
-      id="authSubmit"
-      class="primary"
-      style="width:100%"
-      type="submit"
-    >
-      Se connecter
-    </button>
-
-  </form>
-
-  <p id="authMsg" class="message muted small"></p>
-
-</section>
-
-
-<section id="appView" class="hidden">
-
-  <div class="section">
-
-    <div class="card">
-
-      <div class="row">
-
-        <div>
-          <h2>Tableau de bord</h2>
-
-          <div class="muted small">
-            Bienvenue sur votre espace Bezzy Tasks.
-          </div>
-        </div>
-
-        <span id="statusBadge" class="badge">
-          Utilisateur
-        </span>
-
-      </div>
-
-    </div>
-
-  </div>
-
-
-  <div class="grid">
-
-    <div class="stat">
-      <div class="muted small">
-        Solde disponible
-      </div>
-
-      <strong id="balance">
-        0 FCFA
-      </strong>
-    </div>
-
-    <div class="stat">
-      <div class="muted small">
-        Total gagné
-      </div>
-
-      <strong id="totalEarned">
-        0 FCFA
-      </strong>
-    </div>
-
-    <div class="stat">
-      <div class="muted small">
-        Code de parrainage
-      </div>
-
-      <strong id="referralCode">
-        —
-      </strong>
-    </div>
-
-  </div>
-
-
-  <div class="section card">
-
-    <h3>Mon compte</h3>
-
-    <div class="row">
-      <span class="muted">Contact</span>
-      <strong id="phoneShow">—</strong>
-    </div>
-
-    <div class="row" style="margin-top:10px">
-      <span class="muted">E-mail</span>
-      <strong id="emailShow">—</strong>
-    </div>
-
-    <div class="row" style="margin-top:10px">
-      <span class="muted">Pays</span>
-      <strong id="countryShow">—</strong>
-    </div>
-
-    <div class="row" style="margin-top:10px">
-      <span class="muted">Statut</span>
-      <strong id="accountStatus">Actif</strong>
-    </div>
-
-  </div>
-
-
-  <div class="tabs">
-
-    <button
-      class="tab active"
-      data-tab="offers"
-      type="button"
-    >
-      🎯 Offres
-    </button>
-
-    <button
-      class="tab"
-      data-tab="history"
-      type="button"
-    >
-      📊 Historique
-    </button>
-
-    <button
-      class="tab"
-      data-tab="withdraw"
-      type="button"
-    >
-      💰 Retrait
-    </button>
-
-  </div>
-
-
-  <section id="offersTab" class="section">
-
-    <div class="card">
-
-      <h3>Offres disponibles</h3>
-
-      <div id="offers">
-        Chargement des offres...
-      </div>
-
-    </div>
-
-  </section>
-
-
-  <section id="historyTab" class="section hidden">
-
-    <div class="card">
-
-      <h3>Historique des gains</h3>
-
-      <div id="history">
-        Chargement...
-      </div>
-
-    </div>
-
-  </section>
-
-
-  <section id="withdrawTab" class="section hidden">
-
-    <div class="card">
-
-      <h3>Effectuer un retrait</h3>
+      <!-- PAYS -->
 
       <div class="field">
 
-        <label for="payoutMethod">
-          Mode de paiement
+        <label for="countrySearch">
+          Pays
         </label>
 
-        <select id="payoutMethod">
+        <input
+          id="countrySearch"
+          type="search"
+          placeholder="🔍 Rechercher votre pays..."
+          autocomplete="off"
+        >
+
+        <select id="country" required>
           <option value="">
-            Chargement...
+            Chargement des pays...
           </option>
         </select>
 
+        <div
+          id="countryCount"
+          class="small muted"
+        ></div>
+
+        <div
+          id="countryInfo"
+          class="country-info small muted"
+        >
+          Sélectionnez votre pays.
+        </div>
+
       </div>
 
+      <!-- TELEPHONE / EMAIL -->
 
-      <div class="field">
+      <div class="authChoice">
 
-        <label for="payoutAccount">
-          Compte / numéro de paiement
-        </label>
-
-        <input
-          id="payoutAccount"
-          placeholder="Exemple : numéro Mobile Money"
+        <button
+          type="button"
+          id="phoneModeBtn"
+          class="active"
         >
+          📱 Téléphone
+        </button>
+
+        <button
+          type="button"
+          id="emailModeBtn"
+        >
+          📧 E-mail
+        </button>
 
       </div>
 
+      <!-- TELEPHONE -->
 
-      <div class="field">
+      <div
+        class="field"
+        id="phoneField"
+      >
 
-        <label for="withdrawAmount">
-          Montant du retrait
+        <label for="phone">
+          Numéro de téléphone
         </label>
 
-        <input
-          id="withdrawAmount"
-          type="number"
-          min="1000"
-          max="20000"
-          step="1"
-          placeholder="Montant en FCFA"
-        >
+        <div class="phone-line">
+
+          <input
+            id="dialCode"
+            class="dial-code"
+            value="+242"
+            readonly
+            aria-label="Indicatif du pays"
+          >
+
+          <input
+            id="phone"
+            type="tel"
+            inputmode="tel"
+            autocomplete="tel"
+            placeholder="06 123 45 67"
+          >
+
+        </div>
 
         <div class="small muted">
-          Retrait standard : 1 000 à 10 000 FCFA.
-          Les comptes Pro peuvent aller jusqu'à 20 000 FCFA.
+          L'indicatif est ajouté automatiquement selon le pays.
+        </div>
+
+      </div>
+
+      <!-- EMAIL -->
+
+      <div
+        class="field hidden"
+        id="emailField"
+      >
+
+        <label for="email">
+          Adresse e-mail
+        </label>
+
+        <input
+          id="email"
+          type="email"
+          inputmode="email"
+          autocomplete="email"
+          placeholder="exemple@email.com"
+        >
+
+      </div>
+
+      <!-- MOT DE PASSE -->
+
+      <div class="field">
+
+        <label for="password">
+          Mot de passe
+        </label>
+
+        <input
+          id="password"
+          type="password"
+          minlength="8"
+          autocomplete="current-password"
+          placeholder="Minimum 8 caractères"
+          required
+        >
+
+      </div>
+
+      <button
+        id="authSubmit"
+        class="primary"
+        style="width:100%"
+        type="submit"
+      >
+        Se connecter
+      </button>
+
+    </form>
+
+    <p
+      id="authMsg"
+      class="message muted small"
+    ></p>
+
+  </section>
+
+
+  <!-- =========================
+       APPLICATION
+  ========================== -->
+
+  <section id="appView" class="hidden">
+
+    <!-- EN-TÊTE -->
+
+    <div class="section">
+
+      <div class="card">
+
+        <div class="row">
+
+          <div>
+
+            <h2>
+              Tableau de bord
+            </h2>
+
+            <div class="muted small">
+              Bienvenue sur votre espace Bezzy Tasks.
+            </div>
+
+          </div>
+
+          <span
+            id="statusBadge"
+            class="badge"
+          >
+            Utilisateur
+          </span>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- STATISTIQUES -->
+
+    <div class="grid">
+
+      <div class="stat">
+
+        <div class="muted small">
+          Solde disponible
+        </div>
+
+        <strong id="balance">
+          0 FCFA
+        </strong>
+
+      </div>
+
+      <div class="stat">
+
+        <div class="muted small">
+          Total gagné
+        </div>
+
+        <strong id="totalEarned">
+          0 FCFA
+        </strong>
+
+      </div>
+
+      <div class="stat">
+
+        <div class="muted small">
+          Code de parrainage
+        </div>
+
+        <strong id="referralCode">
+          —
+        </strong>
+
+      </div>
+
+    </div>
+
+
+    <!-- COMPTE -->
+
+    <div class="section card">
+
+      <h3>
+        Mon compte
+      </h3>
+
+      <div class="row">
+
+        <span class="muted">
+          Contact
+        </span>
+
+        <strong id="phoneShow">
+          —
+        </strong>
+
+      </div>
+
+      <div
+        class="row"
+        style="margin-top:10px"
+      >
+
+        <span class="muted">
+          E-mail
+        </span>
+
+        <strong id="emailShow">
+          —
+        </strong>
+
+      </div>
+
+      <div
+        class="row"
+        style="margin-top:10px"
+      >
+
+        <span class="muted">
+          Pays
+        </span>
+
+        <strong id="countryShow">
+          —
+        </strong>
+
+      </div>
+
+      <div
+        class="row"
+        style="margin-top:10px"
+      >
+
+        <span class="muted">
+          Statut
+        </span>
+
+        <strong id="accountStatus">
+          Actif
+        </strong>
+
+      </div>
+
+    </div>
+
+
+    <!-- ONGLETS -->
+
+    <div class="tabs">
+
+      <button
+        class="tab active"
+        data-tab="offers"
+        type="button"
+      >
+        🎯 Offres
+      </button>
+
+      <button
+        class="tab"
+        data-tab="history"
+        type="button"
+      >
+        📊 Historique
+      </button>
+
+      <button
+        class="tab"
+        data-tab="withdraw"
+        type="button"
+      >
+        💰 Retrait
+      </button>
+
+    </div>
+
+
+    <!-- OFFRES -->
+
+    <section
+      id="offersTab"
+      class="section"
+    >
+
+      <div class="card">
+
+        <h3>
+          Offres disponibles
+        </h3>
+
+        <div id="offers">
+          Chargement des offres...
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- HISTORIQUE -->
+
+    <section
+      id="historyTab"
+      class="section hidden"
+    >
+
+      <div class="card">
+
+        <h3>
+          Historique des gains
+        </h3>
+
+        <div id="history">
+          Chargement...
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- RETRAIT -->
+
+    <section
+      id="withdrawTab"
+      class="section hidden"
+    >
+
+      <div class="card">
+
+        <h3>
+          Effectuer un retrait
+        </h3>
+
+        <div class="field">
+
+          <label for="payoutMethod">
+            Mode de paiement
+          </label>
+
+          <select id="payoutMethod">
+            <option value="">
+              Chargement...
+            </option>
+          </select>
+
+        </div>
+
+
+        <div class="field">
+
+          <label for="payoutAccount">
+            Compte / numéro de paiement
+          </label>
+
+          <input
+            id="payoutAccount"
+            placeholder="Exemple : numéro Mobile Money"
+          >
+
+        </div>
+
+
+        <div class="field">
+
+          <label for="withdrawAmount">
+            Montant du retrait
+          </label>
+
+          <input
+            id="withdrawAmount"
+            type="number"
+            min="1000"
+            max="20000"
+            step="1"
+            placeholder="Montant en FCFA"
+          >
+
+          <div class="small muted">
+            Retrait standard : 1 000 à 10 000 FCFA.
+            Les comptes Pro peuvent aller jusqu'à 20 000 FCFA.
+          </div>
+
+        </div>
+
+
+        <button
+          id="withdrawBtn"
+          class="primary"
+          type="button"
+        >
+          Demander le retrait
+        </button>
+
+        <p
+          id="withdrawMsg"
+          class="message muted small"
+        ></p>
+
+      </div>
+
+
+      <!-- VERIFICATION -->
+
+      <div
+        class="card"
+        style="margin-top:15px"
+      >
+
+        <h3>
+          Vérification du compte
+        </h3>
+
+        <div
+          id="verificationBox"
+          class="muted"
+        >
+          Chargement...
         </div>
 
       </div>
 
 
-      <button
-        id="withdrawBtn"
-        class="primary"
-        type="button"
+      <!-- RETRAITS -->
+
+      <div
+        class="card"
+        style="margin-top:15px"
       >
-        Demander le retrait
-      </button>
 
-      <p id="withdrawMsg" class="message muted small"></p>
+        <h3>
+          Mes retraits
+        </h3>
 
-    </div>
+        <div id="withdrawals">
+          Chargement...
+        </div>
 
-
-    <div class="card" style="margin-top:15px">
-
-      <h3>Vérification du compte</h3>
-
-      <div id="verificationBox" class="muted">
-        Chargement...
       </div>
 
-    </div>
-
-
-    <div class="card" style="margin-top:15px">
-
-      <h3>Mes retraits</h3>
-
-      <div id="withdrawals">
-        Chargement...
-      </div>
-
-    </div>
+    </section>
 
   </section>
-
-</section>
 
 </main>
 
@@ -460,7 +845,8 @@
    VARIABLES
 ========================= */
 
-let token = localStorage.getItem("bz_token") || null;
+let token =
+  localStorage.getItem("bz_token") || null;
 
 let authMode = "login";
 
@@ -472,126 +858,181 @@ let currentUser = null;
 
 
 /* =========================
-   UTILITAIRE DOM
+   DOM
 ========================= */
 
-const $ = id => document.getElementById(id);
+const $ = id =>
+  document.getElementById(id);
 
 
 /* =========================
    MESSAGES
 ========================= */
 
-function setMessage(message,type="muted"){
+function setMessage(
+  message,
+  type = "muted"
+){
 
   const el = $("authMsg");
 
-  if(!el)return;
+  if(!el) return;
 
-  el.textContent = message || "";
+  el.textContent =
+    message || "";
 
-  el.className = "message small " + type;
+  el.className =
+    "message small " + type;
 
 }
 
 
-function setWithdrawMessage(message,type="muted"){
+function setWithdrawMessage(
+  message,
+  type = "muted"
+){
 
-  const el = $("withdrawMsg");
+  const el =
+    $("withdrawMsg");
 
-  if(!el)return;
+  if(!el) return;
 
-  el.textContent = message || "";
+  el.textContent =
+    message || "";
 
-  el.className = "message small " + type;
+  el.className =
+    "message small " + type;
 
 }
 
 
 /* =========================
-   MODE TELEPHONE / EMAIL
+   TELEPHONE / EMAIL
 ========================= */
 
 function setContactMode(mode){
 
   contactMode = mode;
 
-  const phoneBtn = $("phoneModeBtn");
-  const emailBtn = $("emailModeBtn");
+  const phoneBtn =
+    $("phoneModeBtn");
 
-  const phoneField = $("phoneField");
-  const emailField = $("emailField");
+  const emailBtn =
+    $("emailModeBtn");
+
+  const phoneField =
+    $("phoneField");
+
+  const emailField =
+    $("emailField");
+
 
   if(phoneBtn){
+
     phoneBtn.classList.toggle(
       "active",
       mode === "phone"
     );
+
   }
 
+
   if(emailBtn){
+
     emailBtn.classList.toggle(
       "active",
       mode === "email"
     );
+
   }
 
+
   if(phoneField){
+
     phoneField.classList.toggle(
       "hidden",
       mode !== "phone"
     );
+
   }
 
+
   if(emailField){
+
     emailField.classList.toggle(
       "hidden",
       mode !== "email"
     );
+
   }
+
 
   if($("phone")){
-    $("phone").required = mode === "phone";
+
+    $("phone").required =
+      mode === "phone";
+
   }
 
+
   if($("email")){
-    $("email").required = mode === "email";
+
+    $("email").required =
+      mode === "email";
+
   }
 
 }
 
 
 /* =========================
-   LOGIN / REGISTER
+   AUTH MODE
 ========================= */
 
-function showAuth(mode,btn){
+function showAuth(
+  mode,
+  btn
+){
 
   authMode = mode;
 
   document
-    .querySelectorAll("#authView .tab")
+    .querySelectorAll(
+      "#authView .tab"
+    )
     .forEach(x =>
-      x.classList.remove("active")
+      x.classList.remove(
+        "active"
+      )
     );
 
+
   if(btn){
-    btn.classList.add("active");
+
+    btn.classList.add(
+      "active"
+    );
+
   }
+
 
   $("authSubmit").textContent =
     mode === "login"
       ? "Se connecter"
       : "Créer mon compte";
 
+
   $("password").autocomplete =
     mode === "login"
       ? "current-password"
       : "new-password";
 
+
   setMessage("");
 
-  setContactMode(contactMode);
+  setContactMode(
+    contactMode
+  );
 
 }
 
@@ -600,22 +1041,32 @@ function showAuth(mode,btn){
    API
 ========================= */
 
-async function api(url,options={}){
+async function api(
+  url,
+  options = {}
+){
 
   const config = {
+
     ...options,
+
     headers:{
       ...(options.headers || {})
     }
+
   };
 
 
   if(
     options.body &&
-    !config.headers["Content-Type"]
+    !config.headers[
+      "Content-Type"
+    ]
   ){
 
-    config.headers["Content-Type"] =
+    config.headers[
+      "Content-Type"
+    ] =
       "application/json";
 
   }
@@ -634,10 +1085,11 @@ async function api(url,options={}){
 
   try{
 
-    response = await fetch(
-      url,
-      config
-    );
+    response =
+      await fetch(
+        url,
+        config
+      );
 
   }catch(e){
 
@@ -648,7 +1100,8 @@ async function api(url,options={}){
   }
 
 
-  const text = await response.text();
+  const text =
+    await response.text();
 
 
   let data = {};
@@ -656,9 +1109,10 @@ async function api(url,options={}){
 
   try{
 
-    data = text
-      ? JSON.parse(text)
-      : {};
+    data =
+      text
+        ? JSON.parse(text)
+        : {};
 
   }catch(e){
 
@@ -671,15 +1125,18 @@ async function api(url,options={}){
 
   if(!response.ok){
 
-    const error = new Error(
-      data.message ||
-      data.error ||
-      "Erreur serveur."
-    );
+    const error =
+      new Error(
+        data.message ||
+        data.error ||
+        "Erreur serveur."
+      );
 
-    error.status = response.status;
+    error.status =
+      response.status;
 
-    error.data = data;
+    error.data =
+      data;
 
     throw error;
 
@@ -697,12 +1154,29 @@ async function api(url,options={}){
 
 function esc(value){
 
-  return String(value ?? "")
-    .replace(/&/g,"&amp;")
-    .replace(/</g,"&lt;")
-    .replace(/>/g,"&gt;")
-    .replace(/"/g,"&quot;")
-    .replace(/'/g,"&#039;");
+  return String(
+    value ?? ""
+  )
+  .replace(
+    /&/g,
+    "&amp;"
+  )
+  .replace(
+    /</g,
+    "&lt;"
+  )
+  .replace(
+    />/g,
+    "&gt;"
+  )
+  .replace(
+    /"/g,
+    "&quot;"
+  )
+  .replace(
+    /'/g,
+    "&#039;"
+  );
 
 }
 
@@ -711,10 +1185,16 @@ function esc(value){
    NUMEROS
 ========================= */
 
-function normalizeDigits(value){
+function normalizeDigits(
+  value
+){
 
-  return String(value || "")
-    .replace(/[^\d]/g,"");
+  return String(
+    value || ""
+  ).replace(
+    /[^\d]/g,
+    ""
+  );
 
 }
 
@@ -722,10 +1202,15 @@ function normalizeDigits(value){
 function buildInternationalPhone(){
 
   const dial =
-    String($("dialCode").value || "").trim();
+    String(
+      $("dialCode").value || ""
+    ).trim();
+
 
   let number =
-    normalizeDigits($("phone").value);
+    normalizeDigits(
+      $("phone").value
+    );
 
 
   if(!dial || !number){
@@ -735,18 +1220,27 @@ function buildInternationalPhone(){
   }
 
 
-  if(number.startsWith("00")){
+  if(
+    number.startsWith("00")
+  ){
 
-    number = number.slice(2);
+    number =
+      number.slice(2);
 
   }
 
 
   const dialDigits =
-    normalizeDigits(dial);
+    normalizeDigits(
+      dial
+    );
 
 
-  if(number.startsWith(dialDigits)){
+  if(
+    number.startsWith(
+      dialDigits
+    )
+  ){
 
     return "+" + number;
 
@@ -754,12 +1248,17 @@ function buildInternationalPhone(){
 
 
   number =
-    number.replace(/^0+/,"");
+    number.replace(
+      /^0+/,
+      ""
+    );
 
 
-  return "+" +
+  return (
+    "+" +
     dialDigits +
-    number;
+    number
+  );
 
 }
 
@@ -768,15 +1267,22 @@ function buildInternationalPhone(){
    PAYS
 ========================= */
 
-function renderCountries(countries){
+function renderCountries(
+  countries
+){
 
-  const select = $("country");
+  const select =
+    $("country");
 
-  if(!select)return;
+  if(!select) return;
 
-  const previous = select.value;
 
-  select.innerHTML = "";
+  const previous =
+    select.value;
+
+
+  select.innerHTML =
+    "";
 
 
   if(!countries.length){
@@ -784,7 +1290,8 @@ function renderCountries(countries){
     select.innerHTML =
       '<option value="">Aucun pays trouvé</option>';
 
-    $("countryCount").textContent = "";
+    $("countryCount")
+      .textContent = "";
 
     return;
 
@@ -792,37 +1299,47 @@ function renderCountries(countries){
 
 
   const fragment =
-    document.createDocumentFragment();
+    document
+      .createDocumentFragment();
 
 
-  countries.forEach(country => {
+  countries.forEach(
+    country => {
 
-    const option =
-      document.createElement("option");
-
-
-    option.value =
-      country.code || "";
-
-
-    option.textContent =
-      country.dial_code
-        ? `${country.name} (${country.dial_code})`
-        : country.name ||
-          country.code ||
-          "";
+      const option =
+        document.createElement(
+          "option"
+        );
 
 
-    fragment.appendChild(option);
-
-  });
-
-
-  select.appendChild(fragment);
+      option.value =
+        country.code || "";
 
 
-  $("countryCount").textContent =
-    `${countries.length} pays disponible(s)`;
+      option.textContent =
+        country.dial_code
+          ? `${country.name} (${country.dial_code})`
+          : country.name ||
+            country.code ||
+            "";
+
+
+      fragment.appendChild(
+        option
+      );
+
+    }
+  );
+
+
+  select.appendChild(
+    fragment
+  );
+
+
+  $("countryCount")
+    .textContent =
+      `${countries.length} pays disponible(s)`;
 
 
   if(
@@ -832,7 +1349,8 @@ function renderCountries(countries){
     )
   ){
 
-    select.value = previous;
+    select.value =
+      previous;
 
   }
 
@@ -841,9 +1359,11 @@ function renderCountries(countries){
 
 function updateCountryInfo(){
 
-  const select = $("country");
+  const select =
+    $("country");
 
-  const code = select.value;
+  const code =
+    select.value;
 
   const country =
     allCountries.find(
@@ -853,10 +1373,12 @@ function updateCountryInfo(){
 
   if(!country){
 
-    $("dialCode").value = "+242";
+    $("dialCode").value =
+      "+242";
 
-    $("countryInfo").textContent =
-      "Sélectionnez votre pays.";
+    $("countryInfo")
+      .textContent =
+        "Sélectionnez votre pays.";
 
     return;
 
@@ -867,20 +1389,26 @@ function updateCountryInfo(){
     country.dial_code || "";
 
 
-  $("countryInfo").innerHTML =
-    `<strong>${esc(country.name || code)}</strong>` +
-    (
-      country.dial_code
-        ? ` — indicatif <strong>${esc(country.dial_code)}</strong>`
-        : ""
-    );
+  $("countryInfo")
+    .innerHTML =
+      `<strong>${esc(
+        country.name || code
+      )}</strong>` +
+      (
+        country.dial_code
+          ? ` — indicatif <strong>${esc(
+              country.dial_code
+            )}</strong>`
+          : ""
+      );
 
 }
 
 
 async function loadCountries(){
 
-  const select = $("country");
+  const select =
+    $("country");
 
 
   try{
@@ -890,30 +1418,21 @@ async function loadCountries(){
 
 
     const data =
-      await api("/api/countries");
+      await api(
+        "/api/countries"
+      );
 
 
     const countries =
       Array.isArray(data)
         ? data
         : (
-          Array.isArray(data.countries)
+          Array.isArray(
+            data.countries
+          )
             ? data.countries
             : []
         );
 
 
-    allCountries =
-      countries
-        .filter(Boolean)
-        .sort(
-          (a,b) =>
-            String(a.name || "")
-              .localeCompare(
-                String(b.name || ""),
-                "fr"
-              )
-        );
-
-
-    render
+    allC
