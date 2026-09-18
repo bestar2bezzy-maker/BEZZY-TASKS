@@ -1,72 +1,919 @@
-<!doctype html><html lang="fr"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Bezzy Tasks</title>
-<style>
-:root{--bg:#07150f;--panel:#0e2419;--panel2:#122d20;--gold:#d9b65b;--text:#f5f3ea;--muted:#a8b5ad;--line:#214332;--ok:#72d6a0}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top,#153b28 0,#07150f 48%,#050d09 100%);color:var(--text);font-family:Inter,system-ui,Arial,sans-serif}button,input{font:inherit}button{cursor:pointer}
-header{position:sticky;top:0;z-index:5;background:rgba(5,13,9,.88);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);padding:14px 5% ;display:flex;justify-content:space-between;align-items:center}.brand{font-weight:900;letter-spacing:1px}.brand span{color:var(--gold)}.wrap{max-width:1100px;margin:auto;padding:30px 5%}
-.hero{display:grid;grid-template-columns:1.4fr .8fr;gap:20px;align-items:stretch}.card{background:linear-gradient(145deg,rgba(18,45,32,.96),rgba(9,26,18,.96));border:1px solid var(--line);border-radius:22px;padding:22px;box-shadow:0 18px 50px #0005}.hero h1{font-size:clamp(32px,5vw,58px);margin:0 0 10px}.gold{color:var(--gold)}.muted{color:var(--muted)}.balance{font-size:42px;font-weight:900;color:var(--gold)}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:20px 0}.stat{padding:18px;background:#0b2016;border:1px solid var(--line);border-radius:16px}.stat b{font-size:25px}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:26px 0 16px}.tab{background:#0b2016;border:1px solid var(--line);color:var(--text);padding:11px 16px;border-radius:999px}.tab.active{border-color:var(--gold);color:var(--gold)}.offers{display:grid;grid-template-columns:repeat(2,1fr);gap:15px}.offer{padding:19px;border-radius:18px;background:#0b2016;border:1px solid var(--line)}.offer h3{margin:0 0 8px}.reward{color:var(--gold);font-weight:900;font-size:20px}.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px}.primary{background:linear-gradient(135deg,#d9b65b,#b88f32);border:0;color:#07150f;font-weight:900;padding:11px 15px;border-radius:12px}.secondary{background:transparent;border:1px solid #42624f;color:var(--text);padding:10px 14px;border-radius:12px}.danger{border-color:#713d3d;color:#ffb0a7}.auth{max-width:460px;margin:60px auto}.field{display:grid;gap:7px;margin:12px 0}.field input,.field select,.field textarea{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);background:#07150f;color:var(--text)}.hidden{display:none}.toast{position:fixed;right:18px;bottom:18px;background:#0e2419;border:1px solid var(--gold);padding:13px 16px;border-radius:12px;display:none;max-width:340px}.small{font-size:13px}.history{display:grid;gap:9px}.row{display:flex;justify-content:space-between;gap:12px;padding:12px;border-bottom:1px solid var(--line)}@media(max-width:760px){.hero,.offers{grid-template-columns:1fr}.grid{grid-template-columns:1fr}.balance{font-size:34px}}
-</style></head><body>
-<header><div class="brand">BEZZY <span>TASKS</span></div><div id="headerActions"></div></header>
-<main class="wrap">
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Bezzy Tasks</title>
+  <meta name="theme-color" content="#07140f">
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#07140f;color:#f5f5f5}
+    .container{width:min(1100px,94%);margin:auto}
+    header{padding:18px 0;border-bottom:1px solid #19372b;background:#081b14;position:sticky;top:0;z-index:10}
+    .header-inner{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .logo{font-size:22px;font-weight:800;color:#d8ad45}
+    .header-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    button,input,select{font:inherit}
+    button{cursor:pointer}
+    .card{background:#0c2119;border:1px solid #1d4434;border-radius:16px;padding:20px;box-shadow:0 8px 30px rgba(0,0,0,.2)}
+    .auth{max-width:560px;margin:50px auto}
+    h1,h2,h3{margin-top:0}
+    .gold{color:#d8ad45}.muted{color:#9eafa8}.small{font-size:13px}
+    .tabs{display:flex;gap:8px;margin:20px 0}
+    .tab,.authChoice button{flex:1;border:1px solid #28523f;background:#0a1813;color:#b9c9c2;padding:11px;border-radius:10px}
+    .tab.active,.authChoice button.active{background:#d8ad45;color:#07140f;border-color:#d8ad45;font-weight:700}
+    .field{margin:14px 0}
+    label{display:block;margin-bottom:7px;font-weight:600}
+    input,select{width:100%;padding:12px;border-radius:10px;border:1px solid #315a48;background:#07140f;color:#fff;outline:none}
+    input:focus,select:focus{border-color:#d8ad45}
+    .primary{background:#d8ad45;color:#07140f;border:0;border-radius:10px;padding:13px 16px;font-weight:800}
+    .secondary{background:#123024;color:#fff;border:1px solid #315a48;border-radius:10px;padding:10px 14px}
+    .danger{background:#6e2424;color:#fff;border:0;border-radius:10px;padding:10px 14px}
+    .hidden{display:none!important}
+    .authChoice{display:flex;gap:8px;margin:14px 0}
+    .phone-line{display:grid;grid-template-columns:145px 1fr;gap:8px}
+    .dial-code{font-weight:700;text-align:center;background:#10291f}
+    .country-info{margin-top:7px;padding:9px 11px;border-radius:8px;background:#10291f;border:1px solid #1d4434}
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;margin:22px 0}
+    .stat{padding:18px;background:#0c2119;border:1px solid #1d4434;border-radius:14px}
+    .stat strong{display:block;font-size:24px;color:#d8ad45;margin-top:7px}
+    .section{margin:20px 0}
+    .offer,.history-item,.withdraw-item{background:#091a13;border:1px solid #1d4434;border-radius:12px;padding:15px;margin:10px 0}
+    .row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+    .badge{display:inline-block;padding:5px 9px;border-radius:999px;background:#173d2e;color:#d8ad45;font-size:12px}
+    .message{min-height:20px;margin-top:10px}.success{color:#71d49a}.error{color:#ff8f8f}.loading{opacity:.7}
+    .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    @media(max-width:700px){
+      .grid{grid-template-columns:1fr}
+      .header-inner{align-items:flex-start;flex-direction:column}
+      .phone-line{grid-template-columns:120px 1fr}
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <div class="container header-inner">
+    <div class="logo">BEZZY TASKS</div>
+    <div id="headerActions" class="header-actions"></div>
+  </div>
+</header>
+
+<main class="container">
+
 <section id="authView" class="auth card">
-<h2>Bienvenue sur Bezzy Tasks</h2><p class="muted">Une plateforme de tâches et d'offres rémunérées, avec validation réelle des campagnes partenaires.</p>
-<div class="tabs"><button class="tab active" onclick="showAuth('login',this)">Connexion</button><button class="tab" onclick="showAuth('register',this)">Créer un compte</button></div>
-<form id="authForm">
-<div id="loginFields">
-<div class="field"><label for="identifier">E-mail ou numéro de téléphone</label><input id="identifier" type="text" autocomplete="username" placeholder="E-mail ou numéro de téléphone"></div>
-</div>
-<div id="registerFields" class="hidden">
-<div class="field"><label for="country">Pays</label><select id="country" required></select></div>
-<div class="field"><label for="phone">Numéro de téléphone</label><input id="phone" type="tel" placeholder="06..."></div>
-<div class="field"><label for="email">E-mail (facultatif)</label><input id="email" type="email" autocomplete="email" placeholder="exemple@email.com"></div>
-</div>
-<div class="field"><label for="password">Mot de passe</label><input id="password" type="password" minlength="8" autocomplete="current-password" required></div>
-<button id="authSubmit" class="primary" style="width:100%">Se connecter</button>
-</form>
-<p id="authMsg" class="muted small"></p></section>
+
+  <h2>Bienvenue sur <span class="gold">Bezzy Tasks</span></h2>
+
+  <p class="muted">
+    Une plateforme de tâches et d'offres rémunérées.
+  </p>
+
+  <div class="tabs">
+    <button id="loginTab" class="tab active" type="button">
+      Connexion
+    </button>
+
+    <button id="registerTab" class="tab" type="button">
+      Créer un compte
+    </button>
+  </div>
+
+  <form id="authForm" novalidate>
+
+    <div class="field">
+
+      <label for="countrySearch">Pays</label>
+
+      <input
+        id="countrySearch"
+        type="search"
+        placeholder="🔍 Rechercher votre pays..."
+        autocomplete="off"
+      >
+
+      <select id="country" required>
+        <option value="">Chargement des pays...</option>
+      </select>
+
+      <div id="countryCount" class="small muted"></div>
+
+      <div id="countryInfo" class="country-info small muted">
+        Sélectionnez votre pays.
+      </div>
+
+    </div>
+
+    <div class="authChoice">
+
+      <button
+        type="button"
+        id="phoneModeBtn"
+        class="active"
+      >
+        📱 Téléphone
+      </button>
+
+      <button
+        type="button"
+        id="emailModeBtn"
+      >
+        📧 E-mail
+      </button>
+
+    </div>
+
+    <div class="field" id="phoneField">
+
+      <label for="phone">
+        Numéro de téléphone
+      </label>
+
+      <div class="phone-line">
+
+        <input
+          id="dialCode"
+          class="dial-code"
+          value="+242"
+          readonly
+          aria-label="Indicatif du pays"
+        >
+
+        <input
+          id="phone"
+          type="tel"
+          inputmode="tel"
+          autocomplete="tel"
+          placeholder="06 123 45 67"
+        >
+
+      </div>
+
+      <div class="small muted">
+        L'indicatif est ajouté automatiquement selon le pays.
+      </div>
+
+    </div>
+
+    <div class="field hidden" id="emailField">
+
+      <label for="email">
+        Adresse e-mail
+      </label>
+
+      <input
+        id="email"
+        type="email"
+        inputmode="email"
+        autocomplete="email"
+        placeholder="exemple@email.com"
+      >
+
+    </div>
+
+    <div class="field">
+
+      <label for="password">
+        Mot de passe
+      </label>
+
+      <input
+        id="password"
+        type="password"
+        minlength="8"
+        autocomplete="current-password"
+        placeholder="Minimum 8 caractères"
+        required
+      >
+
+    </div>
+
+    <button
+      id="authSubmit"
+      class="primary"
+      style="width:100%"
+      type="submit"
+    >
+      Se connecter
+    </button>
+
+  </form>
+
+  <p id="authMsg" class="message muted small"></p>
+
+</section>
+
+
 <section id="appView" class="hidden">
-<div class="hero"><div class="card"><p class="gold">TABLEAU DE BORD</p><h1>Gagnez en réalisant des <span class="gold">missions utiles.</span></h1><p class="muted">Les campagnes sont fournies par des partenaires. Un clic ne donne jamais automatiquement droit à une récompense.</p></div>
-<div class="card"><div class="muted">Solde disponible</div><div class="balance"><span id="balance">0</span> FCFA</div><div class="small muted">Gains cumulés : <span id="earned">0</span> FCFA</div></div></div>
-<div class="grid"><div class="stat"><div class="muted">Code parrainage</div><b id="ref">—</b></div><div class="stat"><div class="muted">Compte</div><b id="phoneShow">—</b></div><div class="stat"><div class="muted">Statut</div><b class="gold">Actif</b></div></div>
-<div class="tabs"><button class="tab active" data-tab="offers">🎮 Jeux & applications</button><button class="tab" data-tab="history">📜 Historique</button><button class="tab" data-tab="withdraw">💸 Retrait</button></div>
-<div id="offersPane"><div id="offers" class="offers"></div></div><div id="historyPane" class="hidden"><div id="history" class="history"></div></div>
-<div id="withdrawPane" class="hidden">
-<div class="card">
-<h2>Retirer mes gains</h2>
-<p class="muted">Choisissez un moyen disponible dans votre pays. La vérification du téléphone est obligatoire avant le retrait.</p><div id="verifyBox" class="card" style="margin:12px 0"><b>🔐 Vérification du numéro</b><p class="small muted">Cette version prépare l’envoi SMS réel. Aucun code n’est envoyé automatiquement tant qu’un fournisseur SMS n’est pas configuré.</p><button class="secondary" onclick="requestVerification()">Demander un code</button><div class="field"><input id="vcode" inputmode="numeric" maxlength="6" placeholder="Code à 6 chiffres"><button class="secondary" onclick="confirmVerification()">Confirmer</button></div></div>
-<div class="field"><label>Mode de paiement</label><select id="wmethod"></select></div>
-<div class="field"><label>Compte / numéro de paiement</label><input id="waccount" placeholder="Numéro Mobile Money ou compte bancaire"></div>
-<div class="field"><label>Montant (FCFA)</label><input id="wamount" type="number" min="1000" placeholder="1000"></div>
-<button class="primary" onclick="withdraw()">Demander le retrait</button>
-<p class="small muted">Le site enregistre la demande. Le paiement réel doit ensuite être confirmé par le système de décaissement.</p>
-</div>
-<div class="card"><h3>Mes demandes</h3><div id="withdrawals"></div></div>
-</div>
-</section></main><div id="toast" class="toast"></div>
+
+  <div class="section">
+
+    <div class="card">
+
+      <div class="row">
+
+        <div>
+          <h2>Tableau de bord</h2>
+
+          <div class="muted small">
+            Bienvenue sur votre espace Bezzy Tasks.
+          </div>
+        </div>
+
+        <span id="statusBadge" class="badge">
+          Utilisateur
+        </span>
+
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <div class="grid">
+
+    <div class="stat">
+      <div class="muted small">
+        Solde disponible
+      </div>
+
+      <strong id="balance">
+        0 FCFA
+      </strong>
+    </div>
+
+    <div class="stat">
+      <div class="muted small">
+        Total gagné
+      </div>
+
+      <strong id="totalEarned">
+        0 FCFA
+      </strong>
+    </div>
+
+    <div class="stat">
+      <div class="muted small">
+        Code de parrainage
+      </div>
+
+      <strong id="referralCode">
+        —
+      </strong>
+    </div>
+
+  </div>
+
+
+  <div class="section card">
+
+    <h3>Mon compte</h3>
+
+    <div class="row">
+      <span class="muted">Contact</span>
+      <strong id="phoneShow">—</strong>
+    </div>
+
+    <div class="row" style="margin-top:10px">
+      <span class="muted">E-mail</span>
+      <strong id="emailShow">—</strong>
+    </div>
+
+    <div class="row" style="margin-top:10px">
+      <span class="muted">Pays</span>
+      <strong id="countryShow">—</strong>
+    </div>
+
+    <div class="row" style="margin-top:10px">
+      <span class="muted">Statut</span>
+      <strong id="accountStatus">Actif</strong>
+    </div>
+
+  </div>
+
+
+  <div class="tabs">
+
+    <button
+      class="tab active"
+      data-tab="offers"
+      type="button"
+    >
+      🎯 Offres
+    </button>
+
+    <button
+      class="tab"
+      data-tab="history"
+      type="button"
+    >
+      📊 Historique
+    </button>
+
+    <button
+      class="tab"
+      data-tab="withdraw"
+      type="button"
+    >
+      💰 Retrait
+    </button>
+
+  </div>
+
+
+  <section id="offersTab" class="section">
+
+    <div class="card">
+
+      <h3>Offres disponibles</h3>
+
+      <div id="offers">
+        Chargement des offres...
+      </div>
+
+    </div>
+
+  </section>
+
+
+  <section id="historyTab" class="section hidden">
+
+    <div class="card">
+
+      <h3>Historique des gains</h3>
+
+      <div id="history">
+        Chargement...
+      </div>
+
+    </div>
+
+  </section>
+
+
+  <section id="withdrawTab" class="section hidden">
+
+    <div class="card">
+
+      <h3>Effectuer un retrait</h3>
+
+      <div class="field">
+
+        <label for="payoutMethod">
+          Mode de paiement
+        </label>
+
+        <select id="payoutMethod">
+          <option value="">
+            Chargement...
+          </option>
+        </select>
+
+      </div>
+
+
+      <div class="field">
+
+        <label for="payoutAccount">
+          Compte / numéro de paiement
+        </label>
+
+        <input
+          id="payoutAccount"
+          placeholder="Exemple : numéro Mobile Money"
+        >
+
+      </div>
+
+
+      <div class="field">
+
+        <label for="withdrawAmount">
+          Montant du retrait
+        </label>
+
+        <input
+          id="withdrawAmount"
+          type="number"
+          min="1000"
+          max="20000"
+          step="1"
+          placeholder="Montant en FCFA"
+        >
+
+        <div class="small muted">
+          Retrait standard : 1 000 à 10 000 FCFA.
+          Les comptes Pro peuvent aller jusqu'à 20 000 FCFA.
+        </div>
+
+      </div>
+
+
+      <button
+        id="withdrawBtn"
+        class="primary"
+        type="button"
+      >
+        Demander le retrait
+      </button>
+
+      <p id="withdrawMsg" class="message muted small"></p>
+
+    </div>
+
+
+    <div class="card" style="margin-top:15px">
+
+      <h3>Vérification du compte</h3>
+
+      <div id="verificationBox" class="muted">
+        Chargement...
+      </div>
+
+    </div>
+
+
+    <div class="card" style="margin-top:15px">
+
+      <h3>Mes retraits</h3>
+
+      <div id="withdrawals">
+        Chargement...
+      </div>
+
+    </div>
+
+  </section>
+
+</section>
+
+</main>
+
+
 <script>
-let token=localStorage.getItem("bz_token"), authMode="login";
-const $=id=>document.getElementById(id);
-function toast(m){$("toast").textContent=m;$("toast").style.display="block";setTimeout(()=>$("toast").style.display="none",3500)}
-function showAuth(mode,btn){authMode=mode;document.querySelectorAll("#authView .tab").forEach(x=>x.classList.remove("active"));btn.classList.add("active");$("loginFields").classList.toggle("hidden",mode!=="login");$("registerFields").classList.toggle("hidden",mode==="login");$("authSubmit").textContent=mode==="login"?"Se connecter":"Créer mon compte";$("country").required=mode==="register";$("phone").required=mode==="register";$("password").autocomplete=mode==="login"?"current-password":"new-password"}
-async function api(url,opt={}){opt.headers={...(opt.headers||{}),"Content-Type":"application/json",...(token?{"Authorization":"Bearer "+token}:{})};let r=await fetch(url,opt);let d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||"Erreur");return d}
-async function loadCountries(){try{let cs=await fetch("/api/countries").then(r=>r.json());$("country").innerHTML=cs.map(c=>`<option value="${c.code}">${esc(c.name)} (${c.currency})</option>`).join("");}catch(e){}}
-async function load(){if(!token)return;try{let me=await api("/api/me");$("authView").classList.add("hidden");$("appView").classList.remove("hidden");$("balance").textContent=me.balance.toLocaleString("fr-FR");$("earned").textContent=me.total_earned.toLocaleString("fr-FR");$("ref").textContent=me.referral_code;$("phoneShow").textContent=me.phone; $("headerActions").innerHTML=`<button class="secondary" onclick="logout()">Déconnexion</button>`;if(me.role==="admin")$("headerActions").innerHTML+=` <a href="/admin" class="secondary" style="text-decoration:none">Admin</a>`;loadOffers()}catch(e){logout()}}
-async function loadOffers(){let rows=await api("/api/offers");$("offers").innerHTML=rows.length?rows.map(o=>`<article class="offer"><div class="small gold">${o.type==="game"?"JEU":"APPLICATION"}</div><h3>${esc(o.title)}</h3><p class="muted">${esc(o.description)}</p><div class="reward">+${Number(o.reward).toLocaleString("fr-FR")} FCFA</div><div class="actions"><button class="primary" onclick="startOffer(${o.id})">Tester l’offre ↗</button>${o.completion_status?`<span class="secondary">${esc(o.completion_status)}</span>`:""}</div><p class="small muted">Validation : partenaire/campagne. Aucun gain sur simple clic.</p></article>`).join(""):`<div class="card">Aucune campagne active pour le moment.</div>`}
-async function startOffer(id){try{let d=await api("/api/offers/"+id+"/start",{method:"POST"});window.open(d.campaign_url,"_blank","noopener");toast("Campagne ouverte. Attendez sa validation réelle pour recevoir le gain.")}catch(e){toast(e.message)}}
-async function loadHistory(){let rows=await api("/api/history");$("history").innerHTML=rows.length?rows.map(x=>`<div class="row"><span>${esc(x.label)}<br><small class="muted">${esc(x.created_at)}</small></span><b class="gold">+${Number(x.amount).toLocaleString("fr-FR")} FCFA</b></div>`).join(""):`<div class="card">Aucun mouvement.</div>`}
-document.querySelectorAll(".tab[data-tab]").forEach(b=>b.onclick=()=>{document.querySelectorAll(".tab[data-tab]").forEach(x=>x.classList.remove("active"));b.classList.add("active");let t=b.dataset.tab;$("offersPane").classList.toggle("hidden",t!=="offers");$("historyPane").classList.toggle("hidden",t!=="history");$("withdrawPane").classList.toggle("hidden",t!=="withdraw");if(t==="history")loadHistory();if(t==="withdraw"){loadPayoutMethods();loadWithdrawals()}});
-$("authForm").onsubmit=async e=>{e.preventDefault();try{let payload;if(authMode==="login"){payload={identifier:$("identifier").value.trim(),password:$("password").value};if(!payload.identifier)throw Error("Veuillez saisir votre e-mail ou votre numéro de téléphone.")}else{payload={phone:$("phone").value.trim(),email:$("email").value.trim(),password:$("password").value,country_code:$("country").value};if(!payload.phone)throw Error("Veuillez saisir votre numéro de téléphone.");if(!payload.country_code)throw Error("Veuillez sélectionner votre pays.");if(!payload.email)delete payload.email}let d=await api("/api/auth/"+(authMode==="login"?"login":"register"),{method:"POST",body:JSON.stringify(payload)});token=d.token||d.accessToken;localStorage.setItem("bz_token",token);load()}catch(x){$("authMsg").textContent=x.message}};
-function logout(){localStorage.removeItem("bz_token");token=null;location.reload()}
+"use strict";
 
-async function loadPayoutMethods(){try{let d=await api("/api/payout-methods");let rows=d.methods||[];$("wmethod").innerHTML=rows.map(x=>`<option value="${x.id}">${esc(x.name)} · min ${Number(x.min_amount).toLocaleString("fr-FR")} ${esc(d.country.currency)}</option>`).join("");}catch(e){toast(e.message)}}
-async function requestVerification(){try{let d=await api("/api/verification/request",{method:"POST"});toast(d.message)}catch(e){toast(e.message)}}
-async function confirmVerification(){try{let d=await api("/api/verification/confirm",{method:"POST",body:JSON.stringify({code:$("vcode").value})});toast(d.message||"Numéro vérifié");load()}catch(e){toast(e.message)}}
-async function withdraw(){try{let d=await api("/api/payout-requests",{method:"POST",headers:{"Idempotency-Key":crypto.randomUUID?crypto.randomUUID():String(Date.now())},body:JSON.stringify({method_id:Number($("wmethod").value),account:$("waccount").value,amount:Number($("wamount").value)})});toast(d.message);load();loadWithdrawals()}catch(e){toast(e.message)}}
 
-async function loadWithdrawals(){try{let rows=await api("/api/payout-requests");$("withdrawals").innerHTML=rows.length?rows.map(w=>`<div class="row"><span>${esc(w.method)} · ${esc(w.account)}<br><small class="muted">${esc(w.created_at)}</small></span><b>${Number(w.amount).toLocaleString("fr-FR")} ${esc(w.currency)} · ${esc(w.status)}</b></div>`).join(""):`<div class="muted">Aucune demande.</div>`}catch(e){toast(e.message)}}
-function esc(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
-loadCountries();
-load();
-</script></body></html>
-                                                                                                                                                           
+/* =========================
+   VARIABLES
+========================= */
+
+let token = localStorage.getItem("bz_token") || null;
+
+let authMode = "login";
+
+let contactMode = "phone";
+
+let allCountries = [];
+
+let currentUser = null;
+
+
+/* =========================
+   UTILITAIRE DOM
+========================= */
+
+const $ = id => document.getElementById(id);
+
+
+/* =========================
+   MESSAGES
+========================= */
+
+function setMessage(message,type="muted"){
+
+  const el = $("authMsg");
+
+  if(!el)return;
+
+  el.textContent = message || "";
+
+  el.className = "message small " + type;
+
+}
+
+
+function setWithdrawMessage(message,type="muted"){
+
+  const el = $("withdrawMsg");
+
+  if(!el)return;
+
+  el.textContent = message || "";
+
+  el.className = "message small " + type;
+
+}
+
+
+/* =========================
+   MODE TELEPHONE / EMAIL
+========================= */
+
+function setContactMode(mode){
+
+  contactMode = mode;
+
+  const phoneBtn = $("phoneModeBtn");
+  const emailBtn = $("emailModeBtn");
+
+  const phoneField = $("phoneField");
+  const emailField = $("emailField");
+
+  if(phoneBtn){
+    phoneBtn.classList.toggle(
+      "active",
+      mode === "phone"
+    );
+  }
+
+  if(emailBtn){
+    emailBtn.classList.toggle(
+      "active",
+      mode === "email"
+    );
+  }
+
+  if(phoneField){
+    phoneField.classList.toggle(
+      "hidden",
+      mode !== "phone"
+    );
+  }
+
+  if(emailField){
+    emailField.classList.toggle(
+      "hidden",
+      mode !== "email"
+    );
+  }
+
+  if($("phone")){
+    $("phone").required = mode === "phone";
+  }
+
+  if($("email")){
+    $("email").required = mode === "email";
+  }
+
+}
+
+
+/* =========================
+   LOGIN / REGISTER
+========================= */
+
+function showAuth(mode,btn){
+
+  authMode = mode;
+
+  document
+    .querySelectorAll("#authView .tab")
+    .forEach(x =>
+      x.classList.remove("active")
+    );
+
+  if(btn){
+    btn.classList.add("active");
+  }
+
+  $("authSubmit").textContent =
+    mode === "login"
+      ? "Se connecter"
+      : "Créer mon compte";
+
+  $("password").autocomplete =
+    mode === "login"
+      ? "current-password"
+      : "new-password";
+
+  setMessage("");
+
+  setContactMode(contactMode);
+
+}
+
+
+/* =========================
+   API
+========================= */
+
+async function api(url,options={}){
+
+  const config = {
+    ...options,
+    headers:{
+      ...(options.headers || {})
+    }
+  };
+
+
+  if(
+    options.body &&
+    !config.headers["Content-Type"]
+  ){
+
+    config.headers["Content-Type"] =
+      "application/json";
+
+  }
+
+
+  if(token){
+
+    config.headers.Authorization =
+      "Bearer " + token;
+
+  }
+
+
+  let response;
+
+
+  try{
+
+    response = await fetch(
+      url,
+      config
+    );
+
+  }catch(e){
+
+    throw new Error(
+      "Impossible de contacter le serveur. Vérifiez votre connexion."
+    );
+
+  }
+
+
+  const text = await response.text();
+
+
+  let data = {};
+
+
+  try{
+
+    data = text
+      ? JSON.parse(text)
+      : {};
+
+  }catch(e){
+
+    data = {
+      message:text
+    };
+
+  }
+
+
+  if(!response.ok){
+
+    const error = new Error(
+      data.message ||
+      data.error ||
+      "Erreur serveur."
+    );
+
+    error.status = response.status;
+
+    error.data = data;
+
+    throw error;
+
+  }
+
+
+  return data;
+
+}
+
+
+/* =========================
+   SECURITE HTML
+========================= */
+
+function esc(value){
+
+  return String(value ?? "")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#039;");
+
+}
+
+
+/* =========================
+   NUMEROS
+========================= */
+
+function normalizeDigits(value){
+
+  return String(value || "")
+    .replace(/[^\d]/g,"");
+
+}
+
+
+function buildInternationalPhone(){
+
+  const dial =
+    String($("dialCode").value || "").trim();
+
+  let number =
+    normalizeDigits($("phone").value);
+
+
+  if(!dial || !number){
+
+    return "";
+
+  }
+
+
+  if(number.startsWith("00")){
+
+    number = number.slice(2);
+
+  }
+
+
+  const dialDigits =
+    normalizeDigits(dial);
+
+
+  if(number.startsWith(dialDigits)){
+
+    return "+" + number;
+
+  }
+
+
+  number =
+    number.replace(/^0+/,"");
+
+
+  return "+" +
+    dialDigits +
+    number;
+
+}
+
+
+/* =========================
+   PAYS
+========================= */
+
+function renderCountries(countries){
+
+  const select = $("country");
+
+  if(!select)return;
+
+  const previous = select.value;
+
+  select.innerHTML = "";
+
+
+  if(!countries.length){
+
+    select.innerHTML =
+      '<option value="">Aucun pays trouvé</option>';
+
+    $("countryCount").textContent = "";
+
+    return;
+
+  }
+
+
+  const fragment =
+    document.createDocumentFragment();
+
+
+  countries.forEach(country => {
+
+    const option =
+      document.createElement("option");
+
+
+    option.value =
+      country.code || "";
+
+
+    option.textContent =
+      country.dial_code
+        ? `${country.name} (${country.dial_code})`
+        : country.name ||
+          country.code ||
+          "";
+
+
+    fragment.appendChild(option);
+
+  });
+
+
+  select.appendChild(fragment);
+
+
+  $("countryCount").textContent =
+    `${countries.length} pays disponible(s)`;
+
+
+  if(
+    previous &&
+    countries.some(
+      c => c.code === previous
+    )
+  ){
+
+    select.value = previous;
+
+  }
+
+}
+
+
+function updateCountryInfo(){
+
+  const select = $("country");
+
+  const code = select.value;
+
+  const country =
+    allCountries.find(
+      c => c.code === code
+    );
+
+
+  if(!country){
+
+    $("dialCode").value = "+242";
+
+    $("countryInfo").textContent =
+      "Sélectionnez votre pays.";
+
+    return;
+
+  }
+
+
+  $("dialCode").value =
+    country.dial_code || "";
+
+
+  $("countryInfo").innerHTML =
+    `<strong>${esc(country.name || code)}</strong>` +
+    (
+      country.dial_code
+        ? ` — indicatif <strong>${esc(country.dial_code)}</strong>`
+        : ""
+    );
+
+}
+
+
+async function loadCountries(){
+
+  const select = $("country");
+
+
+  try{
+
+    select.innerHTML =
+      '<option value="">Chargement des pays...</option>';
+
+
+    const data =
+      await api("/api/countries");
+
+
+    const countries =
+      Array.isArray(data)
+        ? data
+        : (
+          Array.isArray(data.countries)
+            ? data.countries
+            : []
+        );
+
+
+    allCountries =
+      countries
+        .filter(Boolean)
+        .sort(
+          (a,b) =>
+            String(a.name || "")
+              .localeCompare(
+                String(b.name || ""),
+                "fr"
+              )
+        );
+
+
+    render
