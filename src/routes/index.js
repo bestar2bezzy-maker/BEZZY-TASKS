@@ -621,6 +621,8 @@ router.use('/tasks', require('./tasks'));
 
 router.use('/wallet', require('./wallet'));
 
+router.use('/', require('./payout'));
+
 router.use(
   '/admin',
   requireAuth,
