@@ -1,21 +1,34 @@
 const express = require('express');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
+
 const { getDb } = require('../config/database');
+
 const {
   signAccessToken,
   requireAuth,
   requireRole
 } = require('../middleware/auth');
+
 const {
   sendVerificationEmail
 } = require('../services/email');
 
 const router = express.Router();
 
+
 /*
  * ============================================================
- * V33.2.11 - AUTHENTIFICATION + VERIFICATION EMAIL
+ * BEZZY TASKS
+ * V33.2.12
+ * AUTHENTIFICATION + VERIFICATION EMAIL
+ * ============================================================
+ */
+
+
+/*
+ * ============================================================
+ * INDICATIFS TELEPHONIQUES
  * ============================================================
  */
 
@@ -105,6 +118,12 @@ const DIAL_CODES = {
 };
 
 
+/*
+ * ============================================================
+ * EMAIL
+ * ============================================================
+ */
+
 function normalizeEmail(email) {
   if (!email) return null;
 
@@ -116,6 +135,19 @@ function normalizeEmail(email) {
 }
 
 
+function isValidEmail(email) {
+  if (!email) return false;
+
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+
+/*
+ * ============================================================
+ * TELEPHONE
+ * ============================================================
+ */
+
 function normalizePhone(phone) {
   if (!phone) return null;
 
@@ -126,36 +158,39 @@ function normalizePhone(phone) {
 
 
 /*
- * ============================================================
- * VALIDATION EMAIL
- * ============================================================
+ * IMPORTANT
+ *
+ * Le numéro national saisi par l'utilisateur est conservé
+ * avec TOUS ses chiffres.
+ *
+ * Aucun zéro initial n'est supprimé.
+ *
+ * Exemple :
+ *
+ * Congo :
+ * 061234567
+ *
+ * devient :
+ * +242061234567
+ *
+ * et NON :
+ * +24261234567
+ *
+ * Cette règle est générale et ne dépend pas de l'opérateur.
  */
 
-function isValidEmail(email) {
-  if (!email) return false;
-
-  /*
-   * Validation volontairement simple et robuste.
-   * La vérification réelle sera ensuite faite par e-mail.
-   */
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-
-/*
- * ============================================================
- * VALIDATION NUMERO
- * ============================================================
- */
 
 function isValidPhone(phone, countryCode) {
   if (!phone) return false;
 
   const value = normalizePhone(phone);
 
+  if (!value) return false;
+
+
   /*
-   * Si le numéro commence par +,
-   * il doit uniquement contenir des chiffres après le +.
+   * Si un numéro international complet est fourni,
+   * on vérifie uniquement sa structure générale.
    */
   if (value.startsWith('+')) {
     const digits = value.slice(1);
@@ -165,45 +200,29 @@ function isValidPhone(phone, countryCode) {
       digits.length <= 15;
   }
 
+
   /*
-   * Tous les autres cas doivent contenir uniquement
-   * des chiffres.
+   * Un numéro national doit contenir uniquement des chiffres.
    */
   if (!/^\d+$/.test(value)) {
     return false;
   }
 
+
   /*
-   * ==========================================================
-   * CONGO-BRAZZAVILLE
-   * ==========================================================
+   * Le numéro national est conservé tel quel.
    *
-   * Les numéros nationaux doivent rester tels quels :
-   *
-   * MTN    : 06XXXXXXXX
-   * Airtel : 05XXXXXXXX
-   * Autre  : 04XXXXXXXX
-   *
-   * 9 chiffres exactement.
-   *
-   * Exemple valide :
-   * 061234567
-   * 051234567
-   * 041234567
-   *
-   * Exemple invalide :
-   * 06123456  -> 1 chiffre manquant
-   * 0612345678 -> 1 chiffre en trop
-   * 071234567 -> préfixe non autorisé ici
+   * Pour le Congo-Brazzaville, validation du format
+   * national actuellement utilisé par Bezzy Tasks.
    */
   if (String(countryCode).toUpperCase() === 'CG') {
     return /^(04|05|06)\d{7}$/.test(value);
   }
 
+
   /*
-   * Pour les autres pays, on conserve le numéro national
-   * fourni par l'utilisateur et on applique une validation
-   * générale.
+   * Pour les autres pays :
+   * validation générale sans suppression de chiffre.
    */
   return value.length >= 7 && value.length <= 15;
 }
@@ -211,7 +230,7 @@ function isValidPhone(phone, countryCode) {
 
 /*
  * ============================================================
- * CONSTRUCTION NUMERO INTERNATIONAL
+ * CONSTRUCTION DU NUMERO INTERNATIONAL
  * ============================================================
  */
 
@@ -220,33 +239,28 @@ function buildInternationalPhone(phone, countryCode) {
 
   if (!normalized) return null;
 
+
   /*
    * Si l'utilisateur fournit déjà un numéro international,
-   * on le conserve exactement.
+   * on le conserve sans modifier les chiffres.
    */
   if (normalized.startsWith('+')) {
     return normalized;
   }
 
-  const code = String(countryCode || 'CG').toUpperCase();
+
+  const code = String(countryCode || 'CG')
+    .toUpperCase();
+
   const dialCode = DIAL_CODES[code];
 
   if (!dialCode) {
     return normalized;
   }
 
+
   /*
-   * IMPORTANT :
-   *
-   * On NE SUPPRIME PAS le 0 national.
-   *
-   * Exemple Congo :
-   *
-   * 06 123 45 67
-   * devient
-   * +242061234567
-   *
-   * et non +24261234567.
+   * NE JAMAIS SUPPRIMER LE 0 NATIONAL.
    */
   return `${dialCode}${normalized}`;
 }
@@ -260,7 +274,8 @@ function buildInternationalPhone(phone, countryCode) {
 
 function getCountryList() {
   return [
-    // AFRIQUE
+    /* AFRIQUE */
+
     {
       code: 'DZ',
       currency: 'DZD',
@@ -586,7 +601,9 @@ function getCountryList() {
       region: 'Afrique'
     },
 
-    // EUROPE
+
+    /* EUROPE */
+
     {
       code: 'BE',
       currency: 'EUR',
@@ -642,7 +659,9 @@ function getCountryList() {
       region: 'Europe'
     },
 
-    // AMERIQUES
+
+    /* AMERIQUES */
+
     {
       code: 'US',
       currency: 'USD',
@@ -668,7 +687,9 @@ function getCountryList() {
       region: 'Amériques'
     },
 
-    // ASIE
+
+    /* ASIE */
+
     {
       code: 'CN',
       currency: 'CNY',
@@ -694,7 +715,9 @@ function getCountryList() {
       region: 'Asie'
     },
 
-    // MOYEN-ORIENT
+
+    /* MOYEN-ORIENT */
+
     {
       code: 'AE',
       currency: 'AED',
@@ -720,7 +743,9 @@ function getCountryList() {
       region: 'Moyen-Orient'
     },
 
-    // OCEANIE
+
+    /* OCEANIE */
+
     {
       code: 'AU',
       currency: 'AUD',
@@ -733,6 +758,7 @@ function getCountryList() {
       name: 'Nouvelle-Zélande',
       region: 'Océanie'
     }
+
   ].map(country => ({
     ...country,
     dial_code: DIAL_CODES[country.code] || null
@@ -749,7 +775,7 @@ function getCountryList() {
 router.get('/health', (req, res) => {
   res.json({
     status: 'ok',
-    version: '33.2.11',
+    version: '33.2.12',
     service: 'bezzy-tasks'
   });
 });
@@ -757,10 +783,10 @@ router.get('/health', (req, res) => {
 
 router.get('/version', (req, res) => {
   res.json({
-    version: '33.2.11',
+    version: '33.2.12',
     status: 'stable',
     baseline: 'V1-V32',
-    current: 'V33.2.11'
+    current: 'V33.2.12'
   });
 });
 
@@ -784,6 +810,7 @@ router.get('/countries', (req, res) => {
 
 router.post('/auth/register', async (req, res, next) => {
   try {
+
     const {
       email,
       phone,
@@ -791,10 +818,14 @@ router.post('/auth/register', async (req, res, next) => {
       password
     } = req.body || {};
 
+
     const normalizedEmail = normalizeEmail(email);
+
     const normalizedPhone = normalizePhone(phone);
+
     const countryCode = String(country_code || 'CG')
       .toUpperCase();
+
 
     /*
      * ========================================================
@@ -861,6 +892,7 @@ router.post('/auth/register', async (req, res, next) => {
 
 
     if (!isValidPhone(normalizedPhone, countryCode)) {
+
       if (countryCode === 'CG') {
         return res.status(400).json({
           error: 'INVALID_PHONE',
@@ -892,6 +924,7 @@ router.post('/auth/register', async (req, res, next) => {
         WHERE LOWER(email) = LOWER(?)
       `)
       .get(normalizedEmail);
+
 
     if (existingEmail) {
       return res.status(409).json({
@@ -931,6 +964,7 @@ router.post('/auth/register', async (req, res, next) => {
         internationalPhone
       );
 
+
     if (existingPhone) {
       return res.status(409).json({
         error: 'PHONE_EXISTS',
@@ -959,6 +993,7 @@ router.post('/auth/register', async (req, res, next) => {
 
     const userId = crypto.randomUUID();
 
+
     db.prepare(`
       INSERT INTO users (
         id,
@@ -979,13 +1014,12 @@ router.post('/auth/register', async (req, res, next) => {
 
     /*
      * ========================================================
-     * TOKEN DE VERIFICATION EMAIL
+     * TOKEN VERIFICATION EMAIL
      * ========================================================
      */
 
     /*
-     * On supprime d'abord les anciens tokens
-     * non utilisés de cet utilisateur.
+     * Suppression des anciens tokens non utilisés.
      */
     db.prepare(`
       DELETE FROM email_verification_tokens
@@ -995,7 +1029,9 @@ router.post('/auth/register', async (req, res, next) => {
 
 
     /*
-     * Token brut envoyé uniquement par e-mail.
+     * Token brut.
+     *
+     * Il n'est JAMAIS enregistré directement en base.
      */
     const rawToken = crypto
       .randomBytes(32)
@@ -1003,7 +1039,7 @@ router.post('/auth/register', async (req, res, next) => {
 
 
     /*
-     * Seul le hash est enregistré en base.
+     * Hash SHA-256 du token.
      */
     const tokenHash = crypto
       .createHash('sha256')
@@ -1012,7 +1048,8 @@ router.post('/auth/register', async (req, res, next) => {
 
 
     /*
-     * Validité : 24 heures.
+     * Validité du lien :
+     * 24 heures.
      */
     const expiresAt = new Date(
       Date.now() + 24 * 60 * 60 * 1000
@@ -1040,18 +1077,21 @@ router.post('/auth/register', async (req, res, next) => {
      */
 
     try {
+
       await sendVerificationEmail({
         to: normalizedEmail,
         token: rawToken
       });
+
     } catch (emailError) {
+
       /*
-       * L'utilisateur existe, mais son compte reste
-       * non vérifié.
+       * L'inscription existe en base mais le compte
+       * reste non vérifié.
        *
-       * On supprime le token afin d'éviter de conserver
-       * un token inutilisable.
+       * On supprime le token inutilisable.
        */
+
       db.prepare(`
         DELETE FROM email_verification_tokens
         WHERE user_id = ?
@@ -1061,5 +1101,547 @@ router.post('/auth/register', async (req, res, next) => {
         tokenHash
       );
 
+
       console.error(
-      
+        'VERIFICATION_EMAIL_FAILED:',
+        emailError
+      );
+
+
+      return res.status(503).json({
+        error: 'VERIFICATION_EMAIL_FAI
+
+        /*
+ * ============================================================
+ * RESEND VERIFICATION
+ * ============================================================
+ *
+ * Permet de demander un nouveau lien de vérification.
+ *
+ * Pour des raisons de sécurité, la réponse ne révèle pas
+ * si l'adresse e-mail existe réellement dans la base.
+ */
+
+router.post('/auth/resend-verification', async (req, res, next) => {
+  try {
+    const {
+      email
+    } = req.body || {};
+
+    const normalizedEmail = normalizeEmail(email);
+
+    if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
+      return res.status(400).json({
+        error: 'INVALID_EMAIL',
+        message: 'Please provide a valid email address'
+      });
+    }
+
+    const db = getDb();
+
+    const user = db.prepare(`
+      SELECT
+        id,
+        email,
+        email_verified_at
+      FROM users
+      WHERE LOWER(email) = LOWER(?)
+      LIMIT 1
+    `).get(normalizedEmail);
+
+    /*
+     * Ne pas révéler l'existence du compte.
+     */
+    if (!user) {
+      return res.status(200).json({
+        success: true,
+        message:
+          'Si cette adresse peut recevoir un e-mail de vérification, un nouveau lien sera envoyé.'
+      });
+    }
+
+    /*
+     * Compte déjà vérifié.
+     */
+    if (user.email_verified_at) {
+      return res.status(200).json({
+        success: true,
+        already_verified: true,
+        message:
+          'Cette adresse e-mail est déjà vérifiée.'
+      });
+    }
+
+    /*
+     * Supprimer les anciens tokens encore inutilisés.
+     */
+    db.prepare(`
+      DELETE FROM email_verification_tokens
+      WHERE user_id = ?
+        AND used_at IS NULL
+    `).run(user.id);
+
+    /*
+     * Nouveau token.
+     */
+    const rawToken = crypto
+      .randomBytes(32)
+      .toString('hex');
+
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(rawToken)
+      .digest('hex');
+
+    /*
+     * Nouveau délai de validité :
+     * 24 heures.
+     */
+    const expiresAt = new Date(
+      Date.now() + 24 * 60 * 60 * 1000
+    ).toISOString();
+
+    db.prepare(`
+      INSERT INTO email_verification_tokens (
+        user_id,
+        token_hash,
+        expires_at
+      )
+      VALUES (?, ?, ?)
+    `).run(
+      user.id,
+      tokenHash,
+      expiresAt
+    );
+
+    /*
+     * Envoi réel avec Resend.
+     */
+    try {
+
+      await sendVerificationEmail({
+        to: user.email,
+        token: rawToken
+      });
+
+    } catch (emailError) {
+
+      db.prepare(`
+        DELETE FROM email_verification_tokens
+        WHERE user_id = ?
+          AND token_hash = ?
+      `).run(
+        user.id,
+        tokenHash
+      );
+
+      console.error(
+        'RESEND_VERIFICATION_EMAIL_FAILED:',
+        emailError
+      );
+
+      return res.status(503).json({
+        error: 'VERIFICATION_EMAIL_FAILED',
+        message:
+          'Impossible d’envoyer l’e-mail de vérification. Veuillez réessayer plus tard.'
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      email_verification_required: true,
+      message:
+        'Un nouvel e-mail de vérification a été envoyé.'
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
+
+/*
+ * ============================================================
+ * AUTH LOGIN
+ * ============================================================
+ *
+ * Connexion possible avec :
+ *
+ * - e-mail
+ * - numéro de téléphone
+ *
+ * MAIS uniquement après vérification de l'e-mail.
+ */
+
+router.post('/auth/login', async (req, res, next) => {
+  try {
+
+    const {
+      identifier,
+      email,
+      phone,
+      password
+    } = req.body || {};
+
+    /*
+     * Compatibilité avec plusieurs noms de champs.
+     */
+    const loginIdentifier =
+      identifier ||
+      email ||
+      phone;
+
+    const normalizedIdentifier =
+      String(loginIdentifier || '').trim();
+
+    if (!normalizedIdentifier) {
+      return res.status(400).json({
+        error: 'IDENTIFIER_REQUIRED',
+        message:
+          'Email address or phone number is required'
+      });
+    }
+
+    if (!password) {
+      return res.status(400).json({
+        error: 'PASSWORD_REQUIRED',
+        message:
+          'Password is required'
+      });
+    }
+
+    const db = getDb();
+
+    const normalizedEmail =
+      normalizeEmail(normalizedIdentifier);
+
+    const normalizedPhone =
+      normalizePhone(normalizedIdentifier);
+
+    let user = null;
+
+    /*
+     * Si l'identifiant ressemble à un e-mail,
+     * recherche par e-mail.
+     */
+    if (
+      normalizedEmail &&
+      isValidEmail(normalizedEmail)
+    ) {
+
+      user = db.prepare(`
+        SELECT *
+        FROM users
+        WHERE LOWER(email) = LOWER(?)
+        LIMIT 1
+      `).get(normalizedEmail);
+
+    } else {
+
+      /*
+       * Sinon recherche par téléphone.
+       *
+       * On compare :
+       *
+       * - numéro national
+       * - numéro international
+       *
+       * Aucun chiffre n'est retiré.
+       */
+
+      user = db.prepare(`
+        SELECT *
+        FROM users
+        WHERE phone = ?
+           OR phone = ?
+        LIMIT 1
+      `).get(
+        normalizedPhone,
+        normalizedPhone
+      );
+    }
+
+    /*
+     * Identifiants incorrects.
+     */
+    if (!user) {
+      return res.status(401).json({
+        error: 'INVALID_CREDENTIALS',
+        message:
+          'Invalid email/phone or password'
+      });
+    }
+
+    /*
+     * Vérification du mot de passe.
+     */
+    const passwordOk =
+      await bcrypt.compare(
+        String(password),
+        user.password_hash
+      );
+
+    if (!passwordOk) {
+      return res.status(401).json({
+        error: 'INVALID_CREDENTIALS',
+        message:
+          'Invalid email/phone or password'
+      });
+    }
+
+    /*
+     * Vérification du statut.
+     */
+    if (
+      user.status &&
+      String(user.status).toUpperCase() !== 'ACTIVE'
+    ) {
+      return res.status(403).json({
+        error: 'ACCOUNT_DISABLED',
+        message:
+          'This account is not active'
+      });
+    }
+
+    /*
+     * ========================================================
+     * EMAIL NON VERIFIE
+     * ========================================================
+     *
+     * Aucun token de connexion n'est délivré.
+     */
+
+    if (!user.email_verified_at) {
+      return res.status(403).json({
+        error: 'EMAIL_VERIFICATION_REQUIRED',
+        email_verification_required: true,
+        message:
+          'Veuillez vérifier votre adresse e-mail avant de vous connecter.'
+      });
+    }
+
+    /*
+     * ========================================================
+     * CREATION ACCESS TOKEN
+     * ========================================================
+     */
+
+    const accessToken = signAccessToken({
+      sub: user.id,
+      role: user.role || 'USER'
+    });
+
+    return res.status(200).json({
+      success: true,
+      access_token: accessToken,
+      token: accessToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        phone: user.phone,
+        country_code: user.country_code,
+        role: user.role,
+        status: user.status,
+        email_verified: true,
+        email_verified_at: user.email_verified_at,
+        created_at: user.created_at
+      }
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
+
+/*
+ * ============================================================
+ * CURRENT USER
+ * ============================================================
+ */
+
+router.get('/me', requireAuth, (req, res, next) => {
+  try {
+
+    const db = getDb();
+
+    const user = db.prepare(`
+      SELECT
+        id,
+        email,
+        phone,
+        country_code,
+        referral_code,
+        role,
+        status,
+        email_verified_at,
+        created_at
+      FROM users
+      WHERE id = ?
+      LIMIT 1
+    `).get(req.user.sub);
+
+    if (!user) {
+      return res.status(404).json({
+        error: 'USER_NOT_FOUND',
+        message: 'User not found'
+      });
+    }
+
+    return res.json({
+      user: {
+        ...user,
+        email_verified: Boolean(
+          user.email_verified_at
+        )
+      }
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
+
+/*
+ * ============================================================
+ * AUTH STATUS
+ * ============================================================
+ *
+ * Petite route utile pour vérifier l'état du compte.
+ */
+
+router.get('/auth/status', requireAuth, (req, res, next) => {
+  try {
+
+    const db = getDb();
+
+    const user = db.prepare(`
+      SELECT
+        id,
+        email,
+        phone,
+        country_code,
+        role,
+        status,
+        email_verified_at
+      FROM users
+      WHERE id = ?
+      LIMIT 1
+    `).get(req.user.sub);
+
+    if (!user) {
+      return res.status(404).json({
+        error: 'USER_NOT_FOUND'
+      });
+    }
+
+    return res.json({
+      authenticated: true,
+      email_verified: Boolean(
+        user.email_verified_at
+      ),
+      user: {
+        id: user.id,
+        email: user.email,
+        phone: user.phone,
+        country_code: user.country_code,
+        role: user.role,
+        status: user.status
+      }
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
+
+/*
+ * ============================================================
+ * ROUTES TASKS
+ * ============================================================
+ */
+
+const tasksRouter = require('./tasks');
+
+router.use('/tasks', tasksRouter);
+
+
+/*
+ * ============================================================
+ * ROUTES WALLET
+ * ============================================================
+ */
+
+const walletRouter = require('./wallet');
+
+router.use('/wallet', walletRouter);
+
+
+/*
+ * ============================================================
+ * ROUTES PAYOUT
+ * ============================================================
+ *
+ * Les retraits restent séparés du wallet.
+ */
+
+try {
+
+  const payoutRouter = require('./payout');
+
+  router.use('/payout', payoutRouter);
+
+} catch (error) {
+
+  /*
+   * Compatibilité si le module payout n'est pas encore présent.
+   */
+  console.warn(
+    'Payout router unavailable:',
+    error.message
+  );
+}
+
+
+/*
+ * ============================================================
+ * ROUTES ADMIN
+ * ============================================================
+ *
+ * Chargement conditionnel pour conserver la compatibilité
+ * avec les versions précédentes du projet.
+ */
+
+try {
+
+  const adminRouter = require('./admin');
+
+  router.use(
+    '/admin',
+    requireAuth,
+    requireRole('admin', 'moderator'),
+    adminRouter
+  );
+
+} catch (error) {
+
+  /*
+   * Si admin.js n'existe pas encore, l'API principale
+   * continue de fonctionner.
+   */
+  console.warn(
+    'Admin router unavailable:',
+    error.message
+  );
+}
+
+
+/*
+ * ============================================================
+ * EXPORT
+ * ============================================================
+ */
+
+module.exports = router;
