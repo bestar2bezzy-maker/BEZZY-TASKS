@@ -812,11 +812,12 @@ router.post('/auth/register', async (req, res, next) => {
   try {
 
     const {
-      email,
-      phone,
-      country_code = 'CG',
-      password
-    } = req.body || {};
+  identifier,
+  email,
+  phone,
+  country_code = 'CG',
+  password
+} = req.body || {};
 
 
     const normalizedEmail = normalizeEmail(email);
@@ -1790,16 +1791,25 @@ router.post('/auth/login', async (req, res, next) => {
        * Aucun chiffre n'est retiré.
        */
 
-      user = db.prepare(`
-        SELECT *
-        FROM users
-        WHERE phone = ?
-           OR phone = ?
-        LIMIT 1
-      `).get(
-        normalizedPhone,
-        normalizedPhone
-      );
+      const countryCode =
+  String(country_code || 'CG').trim().toUpperCase();
+
+const internationalPhone =
+  buildInternationalPhone(
+    normalizedPhone,
+    countryCode
+  );
+
+user = db.prepare(`
+  SELECT *
+  FROM users
+  WHERE phone = ?
+     OR phone = ?
+  LIMIT 1
+`).get(
+  normalizedPhone,
+  internationalPhone
+);
     }
 
     /*
