@@ -289,8 +289,8 @@ throw Error("Veuillez saisir votre numéro de téléphone.");
 if(!payload.country_code)
 throw Error("Veuillez sélectionner votre pays.");
 
-if(!payload.email)
-delete payload.email
+if(!payload.email){
+  throw Error("Veuillez saisir votre adresse e-mail.");
 }
 
 let d=await api(
@@ -323,6 +323,14 @@ $("authMsg").textContent=x.message
 }
 };
 
+const googleBtn = $("googleBtn");
+
+if(googleBtn){
+  googleBtn.onclick = () => {
+    window.location.href = "/api/auth/google";
+  };
+  }
+  
 function logout(){
 localStorage.removeItem("bz_token");
 token=null;
