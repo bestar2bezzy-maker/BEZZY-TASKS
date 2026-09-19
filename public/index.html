@@ -142,6 +142,9 @@ setTimeout(()=>$("toast").style.display="none",3500)
 }
 
 function showAuth(mode,btn){
+
+  $("googleRegisterBlock").classList.toggle("hidden", mode !== "register");
+  
 authMode=mode;
 document.querySelectorAll("#authView .tab").forEach(x=>x.classList.remove("active"));
 btn.classList.add("active");
