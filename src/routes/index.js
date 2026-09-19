@@ -2239,29 +2239,34 @@ router.get('/auth/google/callback', async (req, res, next) => {
         const userId =
           crypto.randomUUID();
 
-        const placeholderPhone =
-          `google_${googleSub}`;
+        const userId = crypto.randomUUID();
 
-        db.prepare(`
-          INSERT INTO users (
-            id,
-            email,
-            phone,
-            country_code,
-            password_hash,
-            google_sub,
-            email_verified_at
-          )
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-        `).run(
-          userId,
-          googleEmail,
-          placeholderPhone,
-          'CG',
-          null,
-          googleSub,
-          new Date().toISOString()
-        );
+const randomPassword =
+  crypto.randomBytes(32).toString('hex');
+
+const passwordHash =
+  await bcrypt.hash(randomPassword, 12);
+
+db.prepare(`
+  INSERT INTO users (
+    id,
+    email,
+    phone,
+    country_code,
+    password_hash,
+    google_sub,
+    email_verified_at
+  )
+  VALUES (?, ?, ?, ?, ?, ?, ?)
+`).run(
+  userId,
+  googleEmail,
+  null,
+  'CG',
+  passwordHash,
+  googleSub,
+  new Date().toISOString()
+);
 
 
         user = db.prepare(`
