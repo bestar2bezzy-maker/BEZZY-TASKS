@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 
 const { getDb } = require('../config/database');
+const { env } = require('../config/env');
 
 const {
   signAccessToken,
