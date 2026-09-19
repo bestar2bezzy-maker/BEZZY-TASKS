@@ -1906,6 +1906,423 @@ user = db.prepare(`
   }
 });
 
+/*
+ * ============================================================
+ * GOOGLE OAUTH
+ * V33.2.13
+ * ============================================================
+ */
+
+/*
+ * Démarre la connexion Google.
+ */
+router.get('/auth/google', (req, res, next) => {
+  try {
+
+    if (
+      !env.GOOGLE_CLIENT_ID ||
+      !env.GOOGLE_CLIENT_SECRET ||
+      !env.GOOGLE_REDIRECT_URI
+    ) {
+      return res.status(503).send(
+        'Google authentication is not configured.'
+      );
+    }
+
+    /*
+     * State aléatoire contre les attaques CSRF.
+     *
+     * Il est signé dans un cookie temporaire.
+     */
+    const state = crypto
+      .randomBytes(32)
+      .toString('hex');
+
+    const cookieValue = Buffer
+      .from(JSON.stringify({
+        state,
+        expires_at: Date.now() + 10 * 60 * 1000
+      }))
+      .toString('base64url');
+
+    res.setHeader(
+      'Set-Cookie',
+      `bz_google_state=${cookieValue}; Max-Age=600; Path=/api/auth/google; HttpOnly; Secure; SameSite=Lax`
+    );
+
+    const params = new URLSearchParams({
+      client_id: env.GOOGLE_CLIENT_ID,
+      redirect_uri: env.GOOGLE_REDIRECT_URI,
+      response_type: 'code',
+      scope: 'openid email profile',
+      state
+    });
+
+    const googleUrl =
+      'https://accounts.google.com/o/oauth2/v2/auth?' +
+      params.toString();
+
+    return res.redirect(googleUrl);
+
+  } catch (error) {
+    next(error);
+  }
+});
+
+
+/*
+ * Callback Google.
+ */
+router.get('/auth/google/callback', async (req, res, next) => {
+  try {
+
+    const {
+      code,
+      state,
+      error: googleError
+    } = req.query;
+
+
+    /*
+     * L'utilisateur a refusé Google.
+     */
+    if (googleError) {
+      return res.redirect(
+        '/?google_error=' +
+        encodeURIComponent(String(googleError))
+      );
+    }
+
+
+    if (!code || !state) {
+      return res.status(400).send(
+        'Google OAuth response is incomplete.'
+      );
+    }
+
+
+    /*
+     * ========================================================
+     * VALIDATION STATE
+     * ========================================================
+     */
+
+    const cookies = String(
+      req.headers.cookie || ''
+    )
+      .split(';')
+      .map(x => x.trim());
+
+    const stateCookie = cookies
+      .find(x => x.startsWith('bz_google_state='));
+
+    if (!stateCookie) {
+      return res.status(400).send(
+        'Google OAuth state is missing.'
+      );
+    }
+
+    const encodedState =
+      stateCookie.substring(
+        'bz_google_state='.length
+      );
+
+    let savedState;
+
+    try {
+      savedState = JSON.parse(
+        Buffer
+          .from(encodedState, 'base64url')
+          .toString('utf8')
+      );
+    } catch {
+      return res.status(400).send(
+        'Google OAuth state is invalid.'
+      );
+    }
+
+
+    if (
+      !savedState ||
+      savedState.state !== String(state) ||
+      Number(savedState.expires_at) < Date.now()
+    ) {
+      return res.status(400).send(
+        'Google OAuth state validation failed.'
+      );
+    }
+
+
+    /*
+     * Supprimer le cookie state immédiatement.
+     */
+    res.setHeader(
+      'Set-Cookie',
+      'bz_google_state=; Max-Age=0; Path=/api/auth/google; HttpOnly; Secure; SameSite=Lax'
+    );
+
+
+    /*
+     * ========================================================
+     * ECHANGE DU CODE CONTRE LE TOKEN GOOGLE
+     * ========================================================
+     */
+
+    const tokenResponse = await fetch(
+      'https://oauth2.googleapis.com/token',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type':
+            'application/x-www-form-urlencoded'
+        },
+        body: new URLSearchParams({
+          code: String(code),
+          client_id: env.GOOGLE_CLIENT_ID,
+          client_secret: env.GOOGLE_CLIENT_SECRET,
+          redirect_uri: env.GOOGLE_REDIRECT_URI,
+          grant_type: 'authorization_code'
+        }).toString()
+      }
+    );
+
+
+    const tokenData =
+      await tokenResponse.json();
+
+
+    if (
+      !tokenResponse.ok ||
+      !tokenData.access_token
+    ) {
+      console.error(
+        'GOOGLE_TOKEN_EXCHANGE_FAILED:',
+        tokenData
+      );
+
+      return res.status(401).send(
+        'Google authentication failed.'
+      );
+    }
+
+
+    /*
+     * ========================================================
+     * RECUPERATION DU PROFIL GOOGLE
+     * ========================================================
+     */
+
+    const profileResponse = await fetch(
+      'https://openidconnect.googleapis.com/v1/userinfo',
+      {
+        headers: {
+          Authorization:
+            `Bearer ${tokenData.access_token}`
+        }
+      }
+    );
+
+
+    const profile =
+      await profileResponse.json();
+
+
+    if (
+      !profileResponse.ok ||
+      !profile.sub ||
+      !profile.email
+    ) {
+      console.error(
+        'GOOGLE_PROFILE_FAILED:',
+        profile
+      );
+
+      return res.status(401).send(
+        'Unable to retrieve Google account information.'
+      );
+    }
+
+
+    const googleSub =
+      String(profile.sub);
+
+    const googleEmail =
+      normalizeEmail(profile.email);
+
+
+    /*
+     * Google doit avoir confirmé l'adresse.
+     */
+    if (profile.email_verified !== true) {
+      return res.status(403).send(
+        'Your Google email address is not verified.'
+      );
+    }
+
+
+    const db = getDb();
+
+
+    /*
+     * ========================================================
+     * RECHERCHE PAR GOOGLE SUB
+     * ========================================================
+     */
+
+    let user = db.prepare(`
+      SELECT *
+      FROM users
+      WHERE google_sub = ?
+      LIMIT 1
+    `).get(googleSub);
+
+
+    /*
+     * ========================================================
+     * SI GOOGLE N'EST PAS ENCORE LIE :
+     * RECHERCHE PAR EMAIL
+     * ========================================================
+     */
+
+    if (!user) {
+
+      user = db.prepare(`
+        SELECT *
+        FROM users
+        WHERE LOWER(email) = LOWER(?)
+        LIMIT 1
+      `).get(googleEmail);
+
+
+      /*
+       * Compte existant :
+       * on lie le compte Google.
+       */
+      if (user) {
+
+        db.prepare(`
+          UPDATE users
+          SET
+            google_sub = ?,
+            email_verified_at =
+              COALESCE(
+                email_verified_at,
+                ?
+              )
+          WHERE id = ?
+        `).run(
+          googleSub,
+          new Date().toISOString(),
+          user.id
+        );
+
+        user = db.prepare(`
+          SELECT *
+          FROM users
+          WHERE id = ?
+          LIMIT 1
+        `).get(user.id);
+
+      } else {
+
+        /*
+         * ====================================================
+         * NOUVEAU COMPTE GOOGLE
+         * ====================================================
+         *
+         * Google ne fournit pas le numéro de téléphone
+         * de manière garantie.
+         *
+         * Le téléphone pourra être complété plus tard.
+         */
+
+        const userId =
+          crypto.randomUUID();
+
+        const placeholderPhone =
+          `google_${googleSub}`;
+
+        db.prepare(`
+          INSERT INTO users (
+            id,
+            email,
+            phone,
+            country_code,
+            password_hash,
+            google_sub,
+            email_verified_at
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          userId,
+          googleEmail,
+          placeholderPhone,
+          'CG',
+          null,
+          googleSub,
+          new Date().toISOString()
+        );
+
+
+        user = db.prepare(`
+          SELECT *
+          FROM users
+          WHERE id = ?
+          LIMIT 1
+        `).get(userId);
+      }
+    }
+
+
+    /*
+     * ========================================================
+     * COMPTE DESACTIVE
+     * ========================================================
+     */
+
+    if (
+      user.status &&
+      String(user.status).toUpperCase() !== 'ACTIVE'
+    ) {
+      return res.status(403).send(
+        'This Bezzy Tasks account is not active.'
+      );
+    }
+
+
+    /*
+     * ========================================================
+     * JWT BEZZY TASKS
+     * ========================================================
+     */
+
+    const accessToken =
+      signAccessToken({
+        sub: user.id,
+        role: user.role || 'USER'
+      });
+
+
+    /*
+     * ========================================================
+     * REDIRECTION VERS L'INTERFACE
+     * ========================================================
+     *
+     * Le token est placé temporairement dans le hash URL.
+     * Le JavaScript de la page pourra ensuite le récupérer.
+     *
+     * Le hash n'est pas envoyé au serveur.
+     */
+
+    return res.redirect(
+      '/#google_token=' +
+      encodeURIComponent(accessToken)
+    );
+
+  } catch (error) {
+    next(error);
+  }
+});
 
 /*
  * ============================================================
