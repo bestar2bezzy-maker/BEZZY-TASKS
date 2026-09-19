@@ -51,14 +51,4 @@ const env = {
   GOOGLE_REDIRECT_URI:
     process.env.GOOGLE_REDIRECT_URI ||
     'https://bezzy-tasks.onrender.com/api/auth/google/callback'
-
-if (
-  env.NODE_ENV === 'production' &&
-  env.JWT_SECRET.length < 32
-) {
-  throw new Error(
-    'JWT_SECRET must be at least 32 characters in production'
-  );
-}
-
-module.exports = { env };
+};
