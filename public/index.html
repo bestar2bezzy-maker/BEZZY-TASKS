@@ -154,6 +154,29 @@ header{position:sticky;top:0;z-index:5;background:rgba(5,13,9,.88);backdrop-filt
 <div id="toast" class="toast"></div>
 
 <script>
+  const googleHashParams =
+  new URLSearchParams(
+    window.location.hash.substring(1)
+  );
+
+const googleToken =
+  googleHashParams.get("google_token");
+
+if (googleToken) {
+  localStorage.setItem(
+    "bz_token",
+    googleToken
+  );
+
+  history.replaceState(
+    null,
+    "",
+    window.location.pathname +
+    window.location.search
+  );
+
+  window.location.reload();
+  }
 let token=localStorage.getItem("bz_token"), authMode="login";
 const $=id=>document.getElementById(id);
 
