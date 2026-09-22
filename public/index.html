@@ -347,21 +347,17 @@ body:JSON.stringify(payload)
 );
 
 let receivedToken=
-d.access_token||
-d.token||
-d.accessToken;
+d.access_token||d.token||d.accessToken;
 
-if(!receivedToken){
-throw Error(
-d.message||
-"Connexion réussie mais aucun token n'a été reçu."
-)
+if(receivedToken){
+  token=receivedToken;
+  localStorage.setItem("bz_token",token);
+  load();
+}else{
+  $("authMsg").textContent =
+    d.message ||
+    "Compte créé. Vérifiez votre adresse e-mail pour activer votre compte.";
 }
-
-token=receivedToken;
-localStorage.setItem("bz_token",token);
-
-load()
 
 }catch(x){
 $("authMsg").textContent=x.message
