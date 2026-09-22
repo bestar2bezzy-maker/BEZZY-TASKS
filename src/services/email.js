@@ -1,5 +1,5 @@
 const { Resend } = require('resend');
-const { env } = require('../config/env');
+const env = require('../config/env');
 
 function getResendClient() {
   if (!env.RESEND_API_KEY) {
