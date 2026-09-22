@@ -39,7 +39,7 @@ const env = {
 
   APP_BASE_URL:
     process.env.APP_BASE_URL ||
-    'http://localhost:3000'
+    'http://localhost:3000',
 
   GOOGLE_CLIENT_ID:
     process.env.GOOGLE_CLIENT_ID || '',
@@ -51,3 +51,5 @@ const env = {
     process.env.GOOGLE_REDIRECT_URI ||
     'https://bezzy-tasks.onrender.com/api/auth/google/callback'
 };
+
+module.exports = env;
