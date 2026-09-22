@@ -704,8 +704,708 @@ if (googleBtn) {
   };
 
   }
-        
+  /* ============================================================
+   BEZZY TASKS — PARTIE 2C
+   TABLEAU DE BORD + OFFRES
+   ============================================================ */
 
+async function load() {
+
+  if (!token) {
+    return;
+  }
+
+  try {
+
+    const me =
+      await api("/api/me");
+
+    $("authView")
+      .classList
+      .add("hidden");
+
+    $("appView")
+      .classList
+      .remove("hidden");
+
+
+    $("balance").textContent =
+      Number(me.balance || 0)
+        .toLocaleString("fr-FR");
+
+    $("earned").textContent =
+      Number(me.total_earned || 0)
+        .toLocaleString("fr-FR");
+
+    $("ref").textContent =
+      me.referral_code || "—";
+
+    $("phoneShow").textContent =
+      me.phone || "—";
+
+
+    $("headerActions").innerHTML = `
+      <button
+        class="secondary"
+        onclick="logout()"
+      >
+        Déconnexion
+      </button>
+    `;
+
+
+    if (me.role === "admin") {
+
+      $("headerActions").innerHTML += `
+        <a
+          href="/admin"
+          class="secondary"
+          style="text-decoration:none"
+        >
+          Admin
+        </a>
+      `;
+    }
+
+
+    await loadOffers();
+
+  } catch (error) {
+
+    logout();
+
+  }
+}
+
+
+/* ============================================================
+   OFFRES
+   ============================================================ */
+
+async function loadOffers() {
+
+  try {
+
+    const rows =
+      await api("/api/offers");
+
+    $("offers").innerHTML =
+      rows.length
+
+        ? rows.map(offer => `
+
+          <article class="offer">
+
+            <div class="small gold">
+              ${
+                offer.type === "game"
+                  ? "JEU"
+                  : "APPLICATION"
+              }
+            </div>
+
+            <h3>
+              ${esc(offer.title)}
+            </h3>
+
+            <p class="muted">
+              ${esc(offer.description)}
+            </p>
+
+            <div class="reward">
+              +${Number(offer.reward)
+                .toLocaleString("fr-FR")}
+              FCFA
+            </div>
+
+            <div class="actions">
+
+              <button
+                class="primary"
+                onclick="startOffer(${offer.id})"
+              >
+                Tester l’offre ↗
+              </button>
+
+              ${
+                offer.completion_status
+                  ? `
+                    <span class="secondary">
+                      ${esc(
+                        offer.completion_status
+                      )}
+                    </span>
+                  `
+                  : ""
+              }
+
+            </div>
+
+            <p class="small muted">
+              Validation : partenaire/campagne.
+              Aucun gain sur simple clic.
+            </p>
+
+          </article>
+
+        `).join("")
+
+        : `
+
+          <div class="card">
+            Aucune campagne active pour le moment.
+          </div>
+
+        `;
+
+  } catch (error) {
+
+    toast(error.message);
+
+  }
+}
+
+
+/* ============================================================
+   DÉMARRER UNE OFFRE
+   ============================================================ */
+
+async function startOffer(id) {
+
+  try {
+
+    const data =
+      await api(
+        "/api/offers/" + id + "/start",
+        {
+          method: "POST"
+        }
+      );
+
+    window.open(
+      data.campaign_url,
+      "_blank",
+      "noopener"
+    );
+
+    toast(
+      "Campagne ouverte. Attendez sa validation réelle pour recevoir le gain."
+    );
+
+  } catch (error) {
+
+    toast(error.message);
+
+  }
+  }
+  /* ============================================================
+   BEZZY TASKS — PARTIE 2D
+   ONGLETS + HISTORIQUE + DÉCONNEXION
+   ============================================================ */
+
+
+/* ============================================================
+   ONGLETS DU TABLEAU DE BORD
+   ============================================================ */
+
+document
+  .querySelectorAll(".tab[data-tab]")
+  .forEach(button => {
+
+    button.onclick = () => {
+
+      document
+        .querySelectorAll(".tab[data-tab]")
+        .forEach(item => {
+
+          item.classList.remove("active");
+
+        });
+
+      button.classList.add("active");
+
+
+      const tab =
+        button.dataset.tab;
+
+
+      $("offersPane")
+        .classList
+        .toggle(
+          "hidden",
+          tab !== "offers"
+        );
+
+
+      $("historyPane")
+        .classList
+        .toggle(
+          "hidden",
+          tab !== "history"
+        );
+
+
+      $("withdrawPane")
+        .classList
+        .toggle(
+          "hidden",
+          tab !== "withdraw"
+        );
+
+
+      if (tab === "history") {
+
+        loadHistory();
+
+      }
+
+
+      if (tab === "withdraw") {
+
+        loadPayoutMethods();
+
+        loadWithdrawals();
+
+      }
+
+    };
+
+  });
+
+
+/* ============================================================
+   HISTORIQUE
+   ============================================================ */
+
+async function loadHistory() {
+
+  try {
+
+    const rows =
+      await api("/api/history");
+
+
+    $("history").innerHTML =
+      rows.length
+
+        ? rows.map(item => `
+
+          <div class="row">
+
+            <span>
+
+              ${esc(item.label)}
+
+              <br>
+
+              <small class="muted">
+                ${esc(item.created_at)}
+              </small>
+
+            </span>
+
+
+            <b class="gold">
+
+              +${Number(item.amount)
+                .toLocaleString("fr-FR")}
+
+              FCFA
+
+            </b>
+
+          </div>
+
+        `).join("")
+
+        : `
+
+          <div class="card">
+            Aucun mouvement.
+          </div>
+
+        `;
+
+
+  } catch (error) {
+
+    toast(error.message);
+
+  }
+
+}
+
+
+/* ============================================================
+   DÉCONNEXION
+   ============================================================ */
+
+function logout() {
+
+  localStorage.removeItem(
+    "bz_token"
+  );
+
+  token = null;
+
+  location.reload();
+
+  }
+  /* ============================================================
+   BEZZY TASKS — PARTIE 2E
+   RETRAITS + VÉRIFICATION + INITIALISATION
+   ============================================================ */
+
+
+/* ============================================================
+   MÉTHODES DE PAIEMENT
+   ============================================================ */
+
+async function loadPayoutMethods() {
+
+  try {
+
+    const data =
+      await api("/api/payout-methods");
+
+    const methods =
+      data.methods || [];
+
+    const currency =
+      data.country &&
+      data.country.currency
+        ? data.country.currency
+        : "FCFA";
+
+
+    $("wmethod").innerHTML =
+      methods
+        .map(method => `
+
+          <option value="${method.id}">
+            ${esc(method.name)}
+            · min
+            ${Number(method.min_amount)
+              .toLocaleString("fr-FR")}
+            ${esc(currency)}
+          </option>
+
+        `)
+        .join("");
+
+
+  } catch (error) {
+
+    toast(error.message);
+
+  }
+}
+
+
+/* ============================================================
+   DEMANDER UNE VÉRIFICATION DU NUMÉRO
+   ============================================================ */
+
+async function requestVerification() {
+
+  try {
+
+    const data =
+      await api(
+        "/api/verification/request",
+        {
+          method: "POST"
+        }
+      );
+
+    toast(
+      data.message ||
+      "Demande envoyée."
+    );
+
+  } catch (error) {
+
+    toast(error.message);
+
+  }
+}
+
+
+/* ============================================================
+   CONFIRMER LA VÉRIFICATION
+   ============================================================ */
+
+async function confirmVerification() {
+
+  try {
+
+    const code =
+      $("vcode")
+        .value
+        .trim();
+
+    if (!code) {
+
+      throw Error(
+        "Veuillez saisir le code de vérification."
+      );
+
+    }
+
+
+    const data =
+      await api(
+        "/api/verification/confirm",
+        {
+          method: "POST",
+
+          body: JSON.stringify({
+            code
+          })
+        }
+      );
+
+
+    toast(
+      data.message ||
+      "Numéro vérifié."
+    );
+
+    await load();
+
+
+  } catch (error) {
+
+    toast(error.message);
+
+  }
+}
+
+
+/* ============================================================
+   DEMANDE DE RETRAIT
+   ============================================================ */
+
+async function withdraw() {
+
+  try {
+
+    const methodId =
+      Number(
+        $("wmethod").value
+      );
+
+    const account =
+      $("waccount")
+        .value
+        .trim();
+
+    const amount =
+      Number(
+        $("wamount").value
+      );
+
+
+    if (!methodId) {
+
+      throw Error(
+        "Veuillez sélectionner un moyen de paiement."
+      );
+
+    }
+
+
+    if (!account) {
+
+      throw Error(
+        "Veuillez saisir votre compte ou numéro de paiement."
+      );
+
+    }
+
+
+    if (!amount || amount < 1000) {
+
+      throw Error(
+        "Le montant minimum de retrait est de 1 000 FCFA."
+      );
+
+    }
+
+
+    const idempotencyKey =
+      crypto.randomUUID
+        ? crypto.randomUUID()
+        : String(Date.now());
+
+
+    const data =
+      await api(
+        "/api/payout-requests",
+        {
+          method: "POST",
+
+          headers: {
+            "Idempotency-Key":
+              idempotencyKey
+          },
+
+          body: JSON.stringify({
+
+            method_id:
+              methodId,
+
+            account,
+
+            amount
+
+          })
+        }
+      );
+
+
+    toast(
+      data.message ||
+      "Demande de retrait enregistrée."
+    );
+
+
+    await load();
+
+    await loadWithdrawals();
+
+
+  } catch (error) {
+
+    toast(error.message);
+
+  }
+}
+
+
+/* ============================================================
+   HISTORIQUE DES RETRAITS
+   ============================================================ */
+
+async function loadWithdrawals() {
+
+  try {
+
+    const rows =
+      await api(
+        "/api/payout-requests"
+      );
+
+
+    $("withdrawals").innerHTML =
+      rows.length
+
+        ? rows.map(withdrawal => `
+
+          <div class="row">
+
+            <span>
+
+              ${esc(
+                withdrawal.method
+              )}
+
+              ·
+
+              ${esc(
+                withdrawal.account
+              )}
+
+              <br>
+
+              <small class="muted">
+                ${esc(
+                  withdrawal.created_at
+                )}
+              </small>
+
+            </span>
+
+
+            <b>
+
+              ${Number(
+                withdrawal.amount
+              ).toLocaleString("fr-FR")}
+
+              ${esc(
+                withdrawal.currency
+              )}
+
+              ·
+
+              ${esc(
+                withdrawal.status
+              )}
+
+            </b>
+
+          </div>
+
+        `).join("")
+
+        : `
+
+          <div class="muted">
+            Aucune demande.
+          </div>
+
+        `;
+
+
+  } catch (error) {
+
+    toast(error.message);
+
+  }
+}
+
+
+/* ============================================================
+   CONDITIONS
+   ============================================================ */
+
+$("termsLink").onclick = event => {
+
+  event.preventDefault();
+
+  toast(
+    "Les Conditions d'utilisation seront disponibles prochainement."
+  );
+
+};
+
+
+/* ============================================================
+   POLITIQUE DE CONFIDENTIALITÉ
+   ============================================================ */
+
+$("privacyLink").onclick = event => {
+
+  event.preventDefault();
+
+  toast(
+    "La Politique de confidentialité sera disponible prochainement."
+  );
+
+};
+
+
+/* ============================================================
+   INITIALISATION
+   ============================================================ */
+
+loadCountries();
+
+showAuth("register");
+
+load();
+        
 </script>
 
 </body>
