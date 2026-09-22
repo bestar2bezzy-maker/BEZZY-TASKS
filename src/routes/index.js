@@ -2239,8 +2239,6 @@ router.get('/auth/google/callback', async (req, res, next) => {
         const userId =
           crypto.randomUUID();
 
-        const userId = crypto.randomUUID();
-
 const randomPassword =
   crypto.randomBytes(32).toString('hex');
 
