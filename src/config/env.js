@@ -40,7 +40,6 @@ const env = {
   APP_BASE_URL:
     process.env.APP_BASE_URL ||
     'http://localhost:3000'
-};
 
   GOOGLE_CLIENT_ID:
     process.env.GOOGLE_CLIENT_ID || '',
