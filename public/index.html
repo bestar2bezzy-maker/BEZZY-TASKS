@@ -998,10 +998,142 @@ if (googleBtn) {
 
     window.location.href =
       "/api/auth/google";
+    };
+}
+ async function load() {
+  if (!token) return;
 
-  };
+  try {
+    const me = await api("/api/me");
+
+    $("authView").classList.add("hidden");
+    $("appView").classList.remove("hidden");
+
+    $("balance").textContent =
+      Number(me.balance || 0).toLocaleString("fr-FR");
+
+    $("earned").textContent =
+      Number(me.total_earned || 0).toLocaleString("fr-FR");
+
+    $("ref").textContent =
+      me.referral_code || "—";
+
+    $("phoneShow").textContent =
+      me.phone || "—";
+
+    $("headerActions").innerHTML = `
+      <button class="secondary" onclick="logout()">
+        Déconnexion
+      </button>
+    `;
+
+    if (me.role === "admin") {
+      $("headerActions").innerHTML += `
+        <a href="/admin"
+           class="secondary"
+           style="text-decoration:none">
+          Admin
+        </a>
+      `;
+      }    await loadOffers();
+
+  } catch (error) {
+
+    logout();
 
   }
+}
+
+async function loadOffers() {
+
+  try {
+
+    const rows =
+      await api("/api/offers");
+
+    $("offers").innerHTML =
+      rows.length
+        ? rows.map(offer => `
+          <article class="offer">
+
+            <div class="small gold">
+              ${offer.type === "game" ? "JEU" : "APPLICATION"}
+            </div>
+
+            <h3>
+              ${esc(offer.title)}
+            </h3>
+
+            <p class="muted">
+              ${esc(offer.description)}
+            </p>
+
+            <div class="reward">
+              +${Number(offer.reward).toLocaleString("fr-FR")} FCFA
+            </div>
+
+            <div class="actions">
+
+              <button
+                class="primary"
+                onclick="startOffer(${offer.id})"
+              >
+                Tester l’offre ↗
+              </button>
+
+              ${
+                offer.completion_status
+                  ? `<span class="secondary">${esc(offer.completion_status)}</span>`
+                  : ""
+              }
+
+            </div>
+
+            <p class="small muted">
+              Validation : partenaire/campagne.
+              Aucun gain sur simple clic.
+            </p>
+
+          </article>
+        `).join("")
+
+        : `
+          <div class="card">
+            Aucune campagne active pour le moment.
+          </div>
+        `;
+
+  } catch (error) {
+
+    toast(error.message);
+
+  }
+ }
+ async function startOffer(id) {
+
+  try {
+
+    const data =
+      await api("/api/offers/" + id + "/start", {
+        method: "POST"
+      });
+
+    window.open(
+      data.campaign_url,
+      "_blank",
+      "noopener"
+    );
+
+    toast(
+      "Campagne ouverte. Attendez sa validation réelle pour recevoir le gain."
+    );
+
+  } catch (error) {
+
+    toast(error.message);
+
+  }
+ }
   /* ============================================================
    BEZZY TASKS — PARTIE 2C
    TABLEAU DE BORD + OFFRES
