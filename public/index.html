@@ -134,8 +134,8 @@ authView" class="auth card">
 
 <script>
 /* ============================================================
-   BEZZY TASKS — PARTIE 2
-   AUTH + GOOGLE + TABLEAU DE BORD + WALLET
+   BEZZY TASKS — PARTIE 2A
+   AUTHENTIFICATION + UTILITAIRES
    ============================================================ */
 
 const googleHashParams =
@@ -161,11 +161,6 @@ let authMode = "register";
 
 const $ = id => document.getElementById(id);
 
-
-/* ============================================================
-   UTILITAIRES
-   ============================================================ */
-
 function toast(message) {
   const box = $("toast");
 
@@ -178,7 +173,6 @@ function toast(message) {
     box.style.display = "none";
   }, 3500);
 }
-
 
 function esc(value) {
   return String(value ?? "").replace(
@@ -193,21 +187,25 @@ function esc(value) {
   );
 }
 
-
 async function api(url, options = {}) {
-
   options.headers = {
     ...(options.headers || {}),
     "Content-Type": "application/json",
+
     ...(token
-      ? { "Authorization": "Bearer " + token }
+      ? {
+          "Authorization": "Bearer " + token
+        }
       : {})
   };
 
-  const response = await fetch(url, options);
+  const response =
+    await fetch(url, options);
 
   const data =
-    await response.json().catch(() => ({}));
+    await response
+      .json()
+      .catch(() => ({}));
 
   if (!response.ok) {
     throw Error(
@@ -229,22 +227,29 @@ function showAuth(mode) {
 
   authMode = mode;
 
-  const register = mode === "register";
-  const login = mode === "login";
+  const register =
+    mode === "register";
 
-  $("loginFields").classList.toggle(
-    "hidden",
-    !login
-  );
+  const login =
+    mode === "login";
 
-  $("registerFields").classList.toggle(
-    "hidden",
-    !register
-  );
+  $("loginFields")
+    .classList
+    .toggle(
+      "hidden",
+      !login
+    );
 
-  $("googleRegisterBlock").classList.remove(
-    "hidden"
-  );
+  $("registerFields")
+    .classList
+    .toggle(
+      "hidden",
+      !register
+    );
+
+  $("googleRegisterBlock")
+    .classList
+    .remove("hidden");
 
   $("authTitle").textContent =
     register
@@ -271,25 +276,27 @@ function showAuth(mode) {
       ? "Connexion"
       : "Créer un compte";
 
-  $("password").autocomplete =
-    register
-      ? "new-password"
-      : "current-password";
-
   if (register) {
+
     $("loginPassword").value = "";
+
   } else {
+
     $("password").value = "";
     $("confirmPassword").value = "";
+
   }
 
   $("authMsg").textContent = "";
-  $("verificationBox").classList.add("hidden");
+
+  $("verificationBox")
+    .classList
+    .add("hidden");
 }
 
 
 /* ============================================================
-   BOUTON CHANGER CONNEXION / INSCRIPTION
+   CHANGEMENT CONNEXION / INSCRIPTION
    ============================================================ */
 
 $("switchAuthBtn").onclick = () => {
@@ -308,36 +315,55 @@ $("switchAuthBtn").onclick = () => {
    ============================================================ */
 
 const passwordInputs = [
-  ["password", "passwordToggle"],
-  ["confirmPassword", "confirmPasswordToggle"],
-  ["loginPassword", null]
+
+  [
+    "password",
+    "passwordToggle"
+  ],
+
+  [
+    "confirmPassword",
+    "confirmPasswordToggle"
+  ],
+
+  [
+    "loginPassword",
+    "loginPasswordToggle"
+  ]
+
 ];
 
-passwordInputs.forEach(([inputId, buttonId]) => {
+passwordInputs.forEach(
+  ([inputId, buttonId]) => {
 
-  if (!buttonId) return;
+    const input =
+      $(inputId);
 
-  const input = $(inputId);
-  const button = $(buttonId);
+    const button =
+      $(buttonId);
 
-  if (!input || !button) return;
+    if (!input || !button) {
+      return;
+    }
 
-  button.onclick = () => {
+    button.onclick = () => {
 
-    const visible =
-      input.type === "text";
+      const visible =
+        input.type === "text";
 
-    input.type =
-      visible
-        ? "password"
-        : "text";
+      input.type =
+        visible
+          ? "password"
+          : "text";
 
-    button.textContent =
-      visible
-        ? "👁"
-        : "🙈";
-  };
-});
+      button.textContent =
+        visible
+          ? "👁"
+          : "🙈";
+    };
+
+  }
+);
 
 
 /* ============================================================
@@ -349,7 +375,9 @@ async function loadCountries() {
   try {
 
     const response =
-      await fetch("/api/countries");
+      await fetch(
+        "/api/countries"
+      );
 
     const countries =
       await response.json();
@@ -358,16 +386,20 @@ async function loadCountries() {
       !Array.isArray(countries) ||
       !countries.length
     ) {
-      throw Error("Pays indisponibles");
+      throw Error(
+        "Pays indisponibles"
+      );
     }
 
     $("country").innerHTML =
-      countries.map(country => `
-        <option value="${esc(country.code)}">
-          ${esc(country.name)}
-          (${esc(country.currency)})
-        </option>
-      `).join("");
+      countries
+        .map(country => `
+          <option value="${esc(country.code)}">
+            ${esc(country.name)}
+            (${esc(country.currency)})
+          </option>
+        `)
+        .join("");
 
   } catch (error) {
 
@@ -415,11 +447,10 @@ async function loadCountries() {
   }
 
   $("country").value = "CG";
-}
-
-
+  }
 /* ============================================================
-   CRÉATION DE COMPTE / CONNEXION
+   BEZZY TASKS — PARTIE 2B
+   CONNEXION + CRÉATION DE COMPTE
    ============================================================ */
 
 $("authForm").onsubmit = async event => {
@@ -454,17 +485,18 @@ $("authForm").onsubmit = async event => {
         );
       }
 
-      const data = await api(
-        "/api/auth/login",
-        {
-          method: "POST",
+      const data =
+        await api(
+          "/api/auth/login",
+          {
+            method: "POST",
 
-          body: JSON.stringify({
-            identifier,
-            password
-          })
-        }
-      );
+            body: JSON.stringify({
+              identifier,
+              password
+            })
+          }
+        );
 
       const receivedToken =
         data.access_token ||
@@ -478,7 +510,8 @@ $("authForm").onsubmit = async event => {
         );
       }
 
-      token = receivedToken;
+      token =
+        receivedToken;
 
       localStorage.setItem(
         "bz_token",
@@ -570,14 +603,12 @@ $("authForm").onsubmit = async event => {
 
 
     /*
-     * IMPORTANT :
-     * Le backend actuel utilise ces quatre champs
-     * pour l'inscription.
+     * Le backend actuel utilise ces champs
+     * pour créer le compte.
      *
-     * fullName et referralCode sont conservés
-     * dans l'interface pour la prochaine évolution
-     * du backend, mais nous ne les envoyons pas encore
-     * afin de ne pas casser la route actuelle.
+     * fullName et referralCode restent présents
+     * dans l'interface pour une prochaine évolution
+     * du backend.
      */
 
     const payload = {
@@ -588,13 +619,17 @@ $("authForm").onsubmit = async event => {
     };
 
 
-    const data = await api(
-      "/api/auth/register",
-      {
-        method: "POST",
-        body: JSON.stringify(payload)
-      }
-    );
+    const data =
+      await api(
+        "/api/auth/register",
+        {
+          method: "POST",
+
+          body: JSON.stringify(
+            payload
+          )
+        }
+      );
 
 
     const receivedToken =
@@ -603,9 +638,15 @@ $("authForm").onsubmit = async event => {
       data.accessToken;
 
 
+    /*
+     * Certains modes d'inscription
+     * peuvent renvoyer directement un token.
+     */
+
     if (receivedToken) {
 
-      token = receivedToken;
+      token =
+        receivedToken;
 
       localStorage.setItem(
         "bz_token",
@@ -619,12 +660,13 @@ $("authForm").onsubmit = async event => {
 
 
     /*
-     * Le backend actuel exige la vérification
-     * de l'adresse e-mail avant connexion.
+     * Le backend actuel demande
+     * la vérification de l'adresse e-mail.
      */
 
     $("verificationBox")
-      .classList.remove("hidden");
+      .classList
+      .remove("hidden");
 
     $("authMsg").textContent =
       data.message ||
@@ -632,6 +674,7 @@ $("authForm").onsubmit = async event => {
 
     $("authMsg").className =
       "small gold";
+
 
   } catch (error) {
 
@@ -657,576 +700,11 @@ if (googleBtn) {
 
     window.location.href =
       "/api/auth/google";
+
   };
-}
 
-
-/* ============================================================
-   CHARGEMENT DU COMPTE
-   ============================================================ */
-
-async function load() {
-
-  if (!token) {
-    return;
   }
-
-  try {
-
-    const me =
-      await api("/api/me");
-
-    $("authView")
-      .classList.add("hidden");
-
-    $("appView")
-      .classList.remove("hidden");
-
-
-    $("balance").textContent =
-      Number(me.balance || 0)
-        .toLocaleString("fr-FR");
-
-    $("earned").textContent =
-      Number(me.total_earned || 0)
-        .toLocaleString("fr-FR");
-
-    $("ref").textContent =
-      me.referral_code || "—";
-
-    $("phoneShow").textContent =
-      me.phone || "—";
-
-
-    $("headerActions").innerHTML = `
-      <button
-        class="secondary"
-        onclick="logout()"
-      >
-        Déconnexion
-      </button>
-    `;
-
-
-    if (me.role === "admin") {
-
-      $("headerActions").innerHTML += `
-        <a
-          href="/admin"
-          class="secondary"
-          style="text-decoration:none"
-        >
-          Admin
-        </a>
-      `;
-    }
-
-
-    await loadOffers();
-
-  } catch (error) {
-
-    logout();
-  }
-}
-
-
-/* ============================================================
-   OFFRES
-   ============================================================ */
-
-async function loadOffers() {
-
-  try {
-
-    const rows =
-      await api("/api/offers");
-
-    $("offers").innerHTML =
-      rows.length
-
-        ? rows.map(offer => `
-          <article class="offer">
-
-            <div class="small gold">
-              ${
-                offer.type === "game"
-                  ? "JEU"
-                  : "APPLICATION"
-              }
-            </div>
-
-            <h3>
-              ${esc(offer.title)}
-            </h3>
-
-            <p class="muted">
-              ${esc(offer.description)}
-            </p>
-
-            <div class="reward">
-              +${Number(offer.reward)
-                .toLocaleString("fr-FR")}
-              FCFA
-            </div>
-
-            <div class="actions">
-
-              <button
-                class="primary"
-                onclick="startOffer(${offer.id})"
-              >
-                Tester l’offre ↗
-              </button>
-
-              ${
-                offer.completion_status
-                  ? `
-                    <span class="secondary">
-                      ${esc(
-                        offer.completion_status
-                      )}
-                    </span>
-                  `
-                  : ""
-              }
-
-            </div>
-
-            <p class="small muted">
-              Validation : partenaire/campagne.
-              Aucun gain sur simple clic.
-            </p>
-
-          </article>
-        `).join("")
-
-        : `
-          <div class="card">
-            Aucune campagne active pour le moment.
-          </div>
-        `;
-
-  } catch (error) {
-
-    toast(error.message);
-  }
-}
-
-
-async function startOffer(id) {
-
-  try {
-
-    const data =
-      await api(
-        "/api/offers/" + id + "/start",
-        {
-          method: "POST"
-        }
-      );
-
-    window.open(
-      data.campaign_url,
-      "_blank",
-      "noopener"
-    );
-
-    toast(
-      "Campagne ouverte. Attendez sa validation réelle pour recevoir le gain."
-    );
-
-  } catch (error) {
-
-    toast(error.message);
-  }
-}
-
-
-/* ============================================================
-   ONGLETS
-   ============================================================ */
-
-document
-  .querySelectorAll(".tab[data-tab]")
-  .forEach(button => {
-
-    button.onclick = () => {
-
-      document
-        .querySelectorAll(".tab[data-tab]")
-        .forEach(item =>
-          item.classList.remove("active")
-        );
-
-      button.classList.add("active");
-
-      const tab =
-        button.dataset.tab;
-
-
-      $("offersPane")
-        .classList.toggle(
-          "hidden",
-          tab !== "offers"
-        );
-
-      $("historyPane")
-        .classList.toggle(
-          "hidden",
-          tab !== "history"
-        );
-
-      $("withdrawPane")
-        .classList.toggle(
-          "hidden",
-          tab !== "withdraw"
-        );
-
-
-      if (tab === "history") {
-        loadHistory();
-      }
-
-      if (tab === "withdraw") {
-        loadPayoutMethods();
-        loadWithdrawals();
-      }
-    };
-  });
-
-
-/* ============================================================
-   HISTORIQUE
-   ============================================================ */
-
-async function loadHistory() {
-
-  try {
-
-    const rows =
-      await api("/api/history");
-
-    $("history").innerHTML =
-      rows.length
-
-        ? rows.map(item => `
-          <div class="row">
-
-            <span>
-              ${esc(item.label)}
-              <br>
-
-              <small class="muted">
-                ${esc(item.created_at)}
-              </small>
-            </span>
-
-            <b class="gold">
-              +${Number(item.amount)
-                .toLocaleString("fr-FR")}
-              FCFA
-            </b>
-
-          </div>
-        `).join("")
-
-        : `
-          <div class="card">
-            Aucun mouvement.
-          </div>
-        `;
-
-  } catch (error) {
-
-    toast(error.message);
-  }
-}
-
-
-/* ============================================================
-   DÉCONNEXION
-   ============================================================ */
-
-function logout() {
-
-  localStorage.removeItem("bz_token");
-
-  token = null;
-
-  location.reload();
-}
-
-
-/* ============================================================
-   MÉTHODES DE PAIEMENT
-   ============================================================ */
-
-async function loadPayoutMethods() {
-
-  try {
-
-    const data =
-      await api("/api/payout-methods");
-
-    const methods =
-      data.methods || [];
-
-    const currency =
-      data.country &&
-      data.country.currency
-        ? data.country.currency
-        : "FCFA";
-
-
-    $("wmethod").innerHTML =
-      methods.map(method => `
-        <option value="${method.id}">
-          ${esc(method.name)}
-          · min
-          ${Number(method.min_amount)
-            .toLocaleString("fr-FR")}
-          ${esc(currency)}
-        </option>
-      `).join("");
-
-  } catch (error) {
-
-    toast(error.message);
-  }
-}
-
-
-/* ============================================================
-   VÉRIFICATION DU NUMÉRO
-   ============================================================ */
-
-async function requestVerification() {
-
-  try {
-
-    const data =
-      await api(
-        "/api/verification/request",
-        {
-          method: "POST"
-        }
-      );
-
-    toast(
-      data.message ||
-      "Demande envoyée."
-    );
-
-  } catch (error) {
-
-    toast(error.message);
-  }
-}
-
-
-async function confirmVerification() {
-
-  try {
-
-    const code =
-      $("vcode").value.trim();
-
-    if (!code) {
-      throw Error(
-        "Veuillez saisir le code de vérification."
-      );
-    }
-
-    const data =
-      await api(
-        "/api/verification/confirm",
-        {
-          method: "POST",
-
-          body: JSON.stringify({
-            code
-        })
-    );
-
-    toast(
-      data.message ||
-      "Numéro vérifié."
-    );
-
-    await load();
-
-  } catch (error) {
-
-    toast(error.message);
-  }
-  }
-  
-/* ============================================================
-   RETRAIT
-   ============================================================ */
-
-async function withdraw() {
-
-  try {
-
-    const methodId =
-      Number($("wmethod").value);
-
-    const account =
-      $("waccount").value.trim();
-
-    const amount =
-      Number($("wamount").value);
-
-
-    if (!methodId) {
-      throw Error(
-        "Veuillez sélectionner un moyen de paiement."
-      );
-    }
-
-    if (!account) {
-      throw Error(
-        "Veuillez saisir votre compte ou numéro de paiement."
-      );
-    }
-
-    if (!amount || amount < 1000) {
-      throw Error(
-        "Le montant minimum de retrait est de 1 000 FCFA."
-      );
-    }
-
-
-    const idempotencyKey =
-      crypto.randomUUID
-        ? crypto.randomUUID()
-        : String(Date.now());
-
-
-    const data =
-      await api(
-        "/api/payout-requests",
-        {
-          method: "POST",
-
-          headers: {
-            "Idempotency-Key":
-              idempotencyKey
-          },
-
-          body: JSON.stringify({
-            method_id: methodId,
-            account,
-            amount
-          })
-        }
-      );
-
-
-    toast(
-      data.message ||
-      "Demande de retrait enregistrée."
-    );
-
-    await load();
-
-    await loadWithdrawals();
-
-  } catch (error) {
-
-    toast(error.message);
-  }
-  }
-  
-  /* ============================================================
-   DEMANDES DE RETRAIT
-   ============================================================ */
-
-async function loadWithdrawals() {
-
-  try {
-
-    const rows =
-      await api("/api/payout-requests");
-
-    $("withdrawals").innerHTML =
-      rows.length
-
-        ? rows.map(withdrawal => `
-          <div class="row">
-
-            <span>
-              ${esc(withdrawal.method)}
-              ·
-              ${esc(withdrawal.account)}
-
-              <br>
-
-              <small class="muted">
-                ${esc(withdrawal.created_at)}
-              </small>
-            </span>
-
-            <b>
-              ${Number(withdrawal.amount)
-                .toLocaleString("fr-FR")}
-
-              ${esc(withdrawal.currency)}
-
-              ·
-
-              ${esc(withdrawal.status)}
-            </b>
-
-          </div>
-        `).join("")
-
-        : `
-          <div class="muted">
-            Aucune demande.
-          </div>
-        `;
-
-  } catch (error) {
-
-    toast(error.message);
-  }
-  }
-  
-/* ============================================================
-   LIENS CONDITIONS / CONFIDENTIALITÉ
-   ============================================================ */
-
-$("termsLink").onclick = event => {
-
-  event.preventDefault();
-
-  toast(
-    "Les Conditions d'utilisation seront disponibles prochainement."
-  );
-};
-
-
-$("privacyLink").onclick = event => {
-
-  event.preventDefault();
-
-  toast(
-    "La Politique de confidentialité sera disponible prochainement."
-  );
-};
-
-/* ============================================================
-   INITIALISATION
-   ============================================================ */
-
-loadCountries();
-
-showAuth("register");
-
-load();
+        
 
 </script>
 
