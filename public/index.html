@@ -9,7 +9,7 @@ header{position:sticky;top:0;z-index:5;background:rgba(5,13,9,.88);backdrop-filt
 </style></head><body>
 <header><div class="brand">BEZZY <span>TASKS</span></div><div id="headerActions"></div></header>
 <main class="wrap">
-<section id="authView" class="auth card">
+authView" class="auth card">
 <h2>Bienvenue sur Bezzy Tasks</h2><p class="muted">Une plateforme de tâches et d'offres rémunérées, avec validation réelle des campagnes partenaires.</p>
 <div class="tabs"><button class="tab active" onclick="showAuth('login',this)">Connexion</button><button class="tab" onclick="showAuth('register',this)">Créer un compte</button></div>
 
@@ -49,28 +49,7 @@ header{position:sticky;top:0;z-index:5;background:rgba(5,13,9,.88);backdrop-filt
 <div id="googleRegisterBlock" class="hidden" style="margin-top:16px">
 
   <div style="display:flex;align-items:center;gap:10px;margin:14px 0;color:var(--muted)">
-    <span style="height:1px;background:var(--line);flex:1"></span>
-    <strong style="font-size:13px">OU</strong>
-    <span style="height:1px;background:var(--line);flex:1"></span>
-  </div>
-
-  <button
-    id="googleBtn"
-    type="button"
-    class="secondary"
-    style="width:100%"
-  >
-    🌐 Continuer avec Google
-  </button>
-
-  <p class="small muted" style="margin:8px 0 0;text-align:center">
-    Création de compte ou connexion avec votre compte Google.
-  </p>
-
-</div>
-  
-<p id="authMsg" class="muted small"></p>
-</section>
+    <span style="height:1px;background:var(-
 
 <section id="appView" class="hidden">
 <div class="hero">
@@ -154,367 +133,1105 @@ header{position:sticky;top:0;z-index:5;background:rgba(5,13,9,.88);backdrop-filt
 <div id="toast" class="toast"></div>
 
 <script>
-  const googleHashParams =
-  new URLSearchParams(
-    window.location.hash.substring(1)
-  );
+/* ============================================================
+   BEZZY TASKS — PARTIE 2
+   AUTH + GOOGLE + TABLEAU DE BORD + WALLET
+   ============================================================ */
+
+const googleHashParams =
+  new URLSearchParams(window.location.hash.substring(1));
 
 const googleToken =
   googleHashParams.get("google_token");
 
 if (googleToken) {
-  localStorage.setItem(
-    "bz_token",
-    googleToken
-  );
+  localStorage.setItem("bz_token", googleToken);
 
   history.replaceState(
     null,
     "",
-    window.location.pathname +
-    window.location.search
+    window.location.pathname + window.location.search
   );
 
   window.location.reload();
+}
+
+let token = localStorage.getItem("bz_token");
+let authMode = "register";
+
+const $ = id => document.getElementById(id);
+
+
+/* ============================================================
+   UTILITAIRES
+   ============================================================ */
+
+function toast(message) {
+  const box = $("toast");
+
+  if (!box) return;
+
+  box.textContent = message;
+  box.style.display = "block";
+
+  setTimeout(() => {
+    box.style.display = "none";
+  }, 3500);
+}
+
+
+function esc(value) {
+  return String(value ?? "").replace(
+    /[&<>"']/g,
+    m => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;"
+    }[m])
+  );
+}
+
+
+async function api(url, options = {}) {
+
+  options.headers = {
+    ...(options.headers || {}),
+    "Content-Type": "application/json",
+    ...(token
+      ? { "Authorization": "Bearer " + token }
+      : {})
+  };
+
+  const response = await fetch(url, options);
+
+  const data =
+    await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw Error(
+      data.error ||
+      data.message ||
+      "Une erreur est survenue."
+    );
   }
-let token=localStorage.getItem("bz_token"), authMode="login";
-const $=id=>document.getElementById(id);
 
-function toast(m){
-$("toast").textContent=m;
-$("toast").style.display="block";
-setTimeout(()=>$("toast").style.display="none",3500)
+  return data;
 }
 
-function showAuth(mode,btn){
 
-  $("googleRegisterBlock").classList.toggle("hidden", mode !== "register");
-  
-authMode=mode;
-document.querySelectorAll("#authView .tab").forEach(x=>x.classList.remove("active"));
-btn.classList.add("active");
-$("loginFields").classList.toggle("hidden",mode!=="login");
-$("registerFields").classList.toggle("hidden",mode==="login");
-$("authSubmit").textContent=mode==="login"?"Se connecter":"Créer mon compte";
-$("country").required=mode==="register";
-$("phone").required=mode==="register";
-$("password").autocomplete=mode==="login"?"current-password":"new-password"
+/* ============================================================
+   AFFICHAGE CONNEXION / INSCRIPTION
+   ============================================================ */
+
+function showAuth(mode) {
+
+  authMode = mode;
+
+  const register = mode === "register";
+  const login = mode === "login";
+
+  $("loginFields").classList.toggle(
+    "hidden",
+    !login
+  );
+
+  $("registerFields").classList.toggle(
+    "hidden",
+    !register
+  );
+
+  $("googleRegisterBlock").classList.remove(
+    "hidden"
+  );
+
+  $("authTitle").textContent =
+    register
+      ? "Créer un compte 🚀"
+      : "Connexion";
+
+  $("authSubtitle").textContent =
+    register
+      ? "Rejoignez-nous et commencez à gagner dès aujourd’hui."
+      : "Connectez-vous à votre compte Bezzy Tasks.";
+
+  $("authSubmit").textContent =
+    register
+      ? "Créer mon compte"
+      : "Se connecter";
+
+  $("switchText").textContent =
+    register
+      ? "Vous avez déjà un compte ?"
+      : "Vous n’avez pas encore de compte ?";
+
+  $("switchAuthBtn").textContent =
+    register
+      ? "Connexion"
+      : "Créer un compte";
+
+  $("password").autocomplete =
+    register
+      ? "new-password"
+      : "current-password";
+
+  if (register) {
+    $("loginPassword").value = "";
+  } else {
+    $("password").value = "";
+    $("confirmPassword").value = "";
+  }
+
+  $("authMsg").textContent = "";
+  $("verificationBox").classList.add("hidden");
 }
 
-async function api(url,opt={}){
-opt.headers={
-...(opt.headers||{}),
-"Content-Type":"application/json",
-...(token?{"Authorization":"Bearer "+token}:{})
+
+/* ============================================================
+   BOUTON CHANGER CONNEXION / INSCRIPTION
+   ============================================================ */
+
+$("switchAuthBtn").onclick = () => {
+
+  showAuth(
+    authMode === "register"
+      ? "login"
+      : "register"
+  );
+
 };
-let r=await fetch(url,opt);
-let d=await r.json().catch(()=>({}));
-if(!r.ok)throw Error(d.error||d.message||"Erreur");
-return d
-}
 
-async function loadCountries(){
-  try{
-    let r=await fetch("/api/countries");
-    let cs=await r.json();
 
-    if(!Array.isArray(cs) || !cs.length){
+/* ============================================================
+   AFFICHER / MASQUER LES MOTS DE PASSE
+   ============================================================ */
+
+const passwordInputs = [
+  ["password", "passwordToggle"],
+  ["confirmPassword", "confirmPasswordToggle"],
+  ["loginPassword", null]
+];
+
+passwordInputs.forEach(([inputId, buttonId]) => {
+
+  if (!buttonId) return;
+
+  const input = $(inputId);
+  const button = $(buttonId);
+
+  if (!input || !button) return;
+
+  button.onclick = () => {
+
+    const visible =
+      input.type === "text";
+
+    input.type =
+      visible
+        ? "password"
+        : "text";
+
+    button.textContent =
+      visible
+        ? "👁"
+        : "🙈";
+  };
+});
+
+
+/* ============================================================
+   PAYS
+   ============================================================ */
+
+async function loadCountries() {
+
+  try {
+
+    const response =
+      await fetch("/api/countries");
+
+    const countries =
+      await response.json();
+
+    if (
+      !Array.isArray(countries) ||
+      !countries.length
+    ) {
       throw Error("Pays indisponibles");
     }
 
-    $("country").innerHTML=cs.map(c=>
-      `<option value="${esc(c.code)}">${esc(c.name)} (${esc(c.currency)})</option>`
-    ).join("");
+    $("country").innerHTML =
+      countries.map(country => `
+        <option value="${esc(country.code)}">
+          ${esc(country.name)}
+          (${esc(country.currency)})
+        </option>
+      `).join("");
 
-  }catch(e){
+  } catch (error) {
 
-    $("country").innerHTML=`
-      <option value="CG" selected>République du Congo (+242)</option>
-      <option value="CD">République démocratique du Congo (+243)</option>
-      <option value="GA">Gabon (+241)</option>
-      <option value="CM">Cameroun (+237)</option>
-      <option value="CI">Côte d'Ivoire (+225)</option>
-      <option value="SN">Sénégal (+221)</option>
-      <option value="NG">Nigeria (+234)</option>
-      <option value="GH">Ghana (+233)</option>
-      <option value="KE">Kenya (+254)</option>
-      <option value="ZA">Afrique du Sud (+27)</option>
+    $("country").innerHTML = `
+      <option value="CG">
+        République du Congo (+242)
+      </option>
+
+      <option value="CD">
+        République démocratique du Congo (+243)
+      </option>
+
+      <option value="GA">
+        Gabon (+241)
+      </option>
+
+      <option value="CM">
+        Cameroun (+237)
+      </option>
+
+      <option value="CI">
+        Côte d'Ivoire (+225)
+      </option>
+
+      <option value="SN">
+        Sénégal (+221)
+      </option>
+
+      <option value="NG">
+        Nigeria (+234)
+      </option>
+
+      <option value="GH">
+        Ghana (+233)
+      </option>
+
+      <option value="KE">
+        Kenya (+254)
+      </option>
+
+      <option value="ZA">
+        Afrique du Sud (+27)
+      </option>
+    `;
+  }
+
+  $("country").value = "CG";
+}
+
+
+/* ============================================================
+   CRÉATION DE COMPTE / CONNEXION
+   ============================================================ */
+
+$("authForm").onsubmit = async event => {
+
+  event.preventDefault();
+
+  $("authMsg").textContent = "";
+
+  try {
+
+    /* --------------------------------------------------------
+       CONNEXION
+       -------------------------------------------------------- */
+
+    if (authMode === "login") {
+
+      const identifier =
+        $("identifier").value.trim();
+
+      const password =
+        $("loginPassword").value;
+
+      if (!identifier) {
+        throw Error(
+          "Veuillez saisir votre e-mail ou votre numéro de téléphone."
+        );
+      }
+
+      if (!password) {
+        throw Error(
+          "Veuillez saisir votre mot de passe."
+        );
+      }
+
+      const data = await api(
+        "/api/auth/login",
+        {
+          method: "POST",
+
+          body: JSON.stringify({
+            identifier,
+            password
+          })
+        }
+      );
+
+      const receivedToken =
+        data.access_token ||
+        data.token ||
+        data.accessToken;
+
+      if (!receivedToken) {
+        throw Error(
+          data.message ||
+          "Connexion impossible."
+        );
+      }
+
+      token = receivedToken;
+
+      localStorage.setItem(
+        "bz_token",
+        token
+      );
+
+      await load();
+
+      return;
+    }
+
+
+    /* --------------------------------------------------------
+       INSCRIPTION
+       -------------------------------------------------------- */
+
+    const fullName =
+      $("fullName").value.trim();
+
+    const email =
+      $("email").value.trim();
+
+    const phone =
+      $("phone").value.trim();
+
+    const countryCode =
+      $("country").value;
+
+    const password =
+      $("password").value;
+
+    const confirmPassword =
+      $("confirmPassword").value;
+
+    const referralCode =
+      $("referralCode").value.trim();
+
+    const termsAccepted =
+      $("terms").checked;
+
+
+    if (!fullName) {
+      throw Error(
+        "Veuillez saisir votre nom complet."
+      );
+    }
+
+    if (!email) {
+      throw Error(
+        "Veuillez saisir votre adresse e-mail."
+      );
+    }
+
+    if (!phone) {
+      throw Error(
+        "Veuillez saisir votre numéro de téléphone."
+      );
+    }
+
+    if (!countryCode) {
+      throw Error(
+        "Veuillez sélectionner votre pays."
+      );
+    }
+
+    if (!password) {
+      throw Error(
+        "Veuillez saisir un mot de passe."
+      );
+    }
+
+    if (password.length < 8) {
+      throw Error(
+        "Le mot de passe doit contenir au moins 8 caractères."
+      );
+    }
+
+    if (password !== confirmPassword) {
+      throw Error(
+        "Les deux mots de passe ne correspondent pas."
+      );
+    }
+
+    if (!termsAccepted) {
+      throw Error(
+        "Veuillez accepter les Conditions et la Politique de confidentialité."
+      );
+    }
+
+
+    /*
+     * IMPORTANT :
+     * Le backend actuel utilise ces quatre champs
+     * pour l'inscription.
+     *
+     * fullName et referralCode sont conservés
+     * dans l'interface pour la prochaine évolution
+     * du backend, mais nous ne les envoyons pas encore
+     * afin de ne pas casser la route actuelle.
+     */
+
+    const payload = {
+      phone,
+      email,
+      password,
+      country_code: countryCode
+    };
+
+
+    const data = await api(
+      "/api/auth/register",
+      {
+        method: "POST",
+        body: JSON.stringify(payload)
+      }
+    );
+
+
+    const receivedToken =
+      data.access_token ||
+      data.token ||
+      data.accessToken;
+
+
+    if (receivedToken) {
+
+      token = receivedToken;
+
+      localStorage.setItem(
+        "bz_token",
+        token
+      );
+
+      await load();
+
+      return;
+    }
+
+
+    /*
+     * Le backend actuel exige la vérification
+     * de l'adresse e-mail avant connexion.
+     */
+
+    $("verificationBox")
+      .classList.remove("hidden");
+
+    $("authMsg").textContent =
+      data.message ||
+      "Compte créé. Vérifiez votre adresse e-mail pour activer votre compte.";
+
+    $("authMsg").className =
+      "small gold";
+
+  } catch (error) {
+
+    $("authMsg").textContent =
+      error.message;
+
+    $("authMsg").className =
+      "muted small";
+  }
+};
+
+
+/* ============================================================
+   GOOGLE
+   ============================================================ */
+
+const googleBtn =
+  $("googleBtn");
+
+if (googleBtn) {
+
+  googleBtn.onclick = () => {
+
+    window.location.href =
+      "/api/auth/google";
+  };
+}
+
+
+/* ============================================================
+   CHARGEMENT DU COMPTE
+   ============================================================ */
+
+async function load() {
+
+  if (!token) {
+    return;
+  }
+
+  try {
+
+    const me =
+      await api("/api/me");
+
+    $("authView")
+      .classList.add("hidden");
+
+    $("appView")
+      .classList.remove("hidden");
+
+
+    $("balance").textContent =
+      Number(me.balance || 0)
+        .toLocaleString("fr-FR");
+
+    $("earned").textContent =
+      Number(me.total_earned || 0)
+        .toLocaleString("fr-FR");
+
+    $("ref").textContent =
+      me.referral_code || "—";
+
+    $("phoneShow").textContent =
+      me.phone || "—";
+
+
+    $("headerActions").innerHTML = `
+      <button
+        class="secondary"
+        onclick="logout()"
+      >
+        Déconnexion
+      </button>
     `;
 
+
+    if (me.role === "admin") {
+
+      $("headerActions").innerHTML += `
+        <a
+          href="/admin"
+          class="secondary"
+          style="text-decoration:none"
+        >
+          Admin
+        </a>
+      `;
+    }
+
+
+    await loadOffers();
+
+  } catch (error) {
+
+    logout();
   }
-
-  $("country").value="CG";
 }
 
-async function load(){
-if(!token)return;
-try{
-let me=await api("/api/me");
-$("authView").classList.add("hidden");
-$("appView").classList.remove("hidden");
-$("balance").textContent=me.balance.toLocaleString("fr-FR");
-$("earned").textContent=me.total_earned.toLocaleString("fr-FR");
-$("ref").textContent=me.referral_code;
-$("phoneShow").textContent=me.phone;
 
-$("headerActions").innerHTML=`<button class="secondary" onclick="logout()">Déconnexion</button>`;
+/* ============================================================
+   OFFRES
+   ============================================================ */
 
-if(me.role==="admin")
-$("headerActions").innerHTML+=` <a href="/admin" class="secondary" style="text-decoration:none">Admin</a>`;
+async function loadOffers() {
 
-loadOffers()
-}catch(e){
-logout()
-}
-}
+  try {
 
-async function loadOffers(){
-let rows=await api("/api/offers");
+    const rows =
+      await api("/api/offers");
 
-$("offers").innerHTML=rows.length?
-rows.map(o=>`
-<article class="offer">
-<div class="small gold">${o.type==="game"?"JEU":"APPLICATION"}</div>
-<h3>${esc(o.title)}</h3>
-<p class="muted">${esc(o.description)}</p>
-<div class="reward">+${Number(o.reward).toLocaleString("fr-FR")} FCFA</div>
-<div class="actions">
-<button class="primary" onclick="startOffer(${o.id})">Tester l’offre ↗</button>
-${o.completion_status?`<span class="secondary">${esc(o.completion_status)}</span>`:""}
-</div>
-<p class="small muted">Validation : partenaire/campagne. Aucun gain sur simple clic.</p>
-</article>
-`).join("")
-:
-`<div class="card">Aucune campagne active pour le moment.</div>`
-}
+    $("offers").innerHTML =
+      rows.length
 
-async function startOffer(id){
-try{
-let d=await api("/api/offers/"+id+"/start",{method:"POST"});
-window.open(d.campaign_url,"_blank","noopener");
-toast("Campagne ouverte. Attendez sa validation réelle pour recevoir le gain.")
-}catch(e){
-toast(e.message)
-}
-}
+        ? rows.map(offer => `
+          <article class="offer">
 
-async function loadHistory(){
-let rows=await api("/api/history");
+            <div class="small gold">
+              ${
+                offer.type === "game"
+                  ? "JEU"
+                  : "APPLICATION"
+              }
+            </div>
 
-$("history").innerHTML=rows.length?
-rows.map(x=>`
-<div class="row">
-<span>${esc(x.label)}<br><small class="muted">${esc(x.created_at)}</small></span>
-<b class="gold">+${Number(x.amount).toLocaleString("fr-FR")} FCFA</b>
-</div>
-`).join("")
-:
-`<div class="card">Aucun mouvement.</div>`
-}
+            <h3>
+              ${esc(offer.title)}
+            </h3>
 
-document.querySelectorAll(".tab[data-tab]").forEach(b=>b.onclick=()=>{
-document.querySelectorAll(".tab[data-tab]").forEach(x=>x.classList.remove("active"));
-b.classList.add("active");
+            <p class="muted">
+              ${esc(offer.description)}
+            </p>
 
-let t=b.dataset.tab;
+            <div class="reward">
+              +${Number(offer.reward)
+                .toLocaleString("fr-FR")}
+              FCFA
+            </div>
 
-$("offersPane").classList.toggle("hidden",t!=="offers");
-$("historyPane").classList.toggle("hidden",t!=="history");
-$("withdrawPane").classList.toggle("hidden",t!=="withdraw");
+            <div class="actions">
 
-if(t==="history")loadHistory();
-if(t==="withdraw"){
-loadPayoutMethods();
-loadWithdrawals()
-}
-});
+              <button
+                class="primary"
+                onclick="startOffer(${offer.id})"
+              >
+                Tester l’offre ↗
+              </button>
 
-$("authForm").onsubmit=async e=>{
-e.preventDefault();
+              ${
+                offer.completion_status
+                  ? `
+                    <span class="secondary">
+                      ${esc(
+                        offer.completion_status
+                      )}
+                    </span>
+                  `
+                  : ""
+              }
 
-try{
-let payload;
+            </div>
 
-if(authMode==="login"){
-payload={
-identifier:$("identifier").value.trim(),
-password:$("password").value
-};
+            <p class="small muted">
+              Validation : partenaire/campagne.
+              Aucun gain sur simple clic.
+            </p>
 
-if(!payload.identifier)
-throw Error("Veuillez saisir votre e-mail ou votre numéro de téléphone.");
+          </article>
+        `).join("")
 
-}else{
+        : `
+          <div class="card">
+            Aucune campagne active pour le moment.
+          </div>
+        `;
 
-payload={
-phone:$("phone").value.trim(),
-email:$("email").value.trim(),
-password:$("password").value,
-country_code:$("country").value
-};
+  } catch (error) {
 
-if(!payload.phone)
-throw Error("Veuillez saisir votre numéro de téléphone.");
-
-if(!payload.country_code)
-throw Error("Veuillez sélectionner votre pays.");
-
-if(!payload.email){
-  throw Error("Veuillez saisir votre adresse e-mail.");
+    toast(error.message);
+  }
 }
 
-let d=await api(
-"/api/auth/"+(authMode==="login"?"login":"register"),
-{
-method:"POST",
-body:JSON.stringify(payload)
+
+async function startOffer(id) {
+
+  try {
+
+    const data =
+      await api(
+        "/api/offers/" + id + "/start",
+        {
+          method: "POST"
+        }
+      );
+
+    window.open(
+      data.campaign_url,
+      "_blank",
+      "noopener"
+    );
+
+    toast(
+      "Campagne ouverte. Attendez sa validation réelle pour recevoir le gain."
+    );
+
+  } catch (error) {
+
+    toast(error.message);
+  }
 }
-);
 
-let receivedToken=
-d.access_token||d.token||d.accessToken;
 
-if(receivedToken){
-  token=receivedToken;
-  localStorage.setItem("bz_token",token);
-  load();
-}else{
-  $("authMsg").textContent =
-    d.message ||
-    "Compte créé. Vérifiez votre adresse e-mail pour activer votre compte.";
+/* ============================================================
+   ONGLETS
+   ============================================================ */
+
+document
+  .querySelectorAll(".tab[data-tab]")
+  .forEach(button => {
+
+    button.onclick = () => {
+
+      document
+        .querySelectorAll(".tab[data-tab]")
+        .forEach(item =>
+          item.classList.remove("active")
+        );
+
+      button.classList.add("active");
+
+      const tab =
+        button.dataset.tab;
+
+
+      $("offersPane")
+        .classList.toggle(
+          "hidden",
+          tab !== "offers"
+        );
+
+      $("historyPane")
+        .classList.toggle(
+          "hidden",
+          tab !== "history"
+        );
+
+      $("withdrawPane")
+        .classList.toggle(
+          "hidden",
+          tab !== "withdraw"
+        );
+
+
+      if (tab === "history") {
+        loadHistory();
+      }
+
+      if (tab === "withdraw") {
+        loadPayoutMethods();
+        loadWithdrawals();
+      }
+    };
+  });
+
+
+/* ============================================================
+   HISTORIQUE
+   ============================================================ */
+
+async function loadHistory() {
+
+  try {
+
+    const rows =
+      await api("/api/history");
+
+    $("history").innerHTML =
+      rows.length
+
+        ? rows.map(item => `
+          <div class="row">
+
+            <span>
+              ${esc(item.label)}
+              <br>
+
+              <small class="muted">
+                ${esc(item.created_at)}
+              </small>
+            </span>
+
+            <b class="gold">
+              +${Number(item.amount)
+                .toLocaleString("fr-FR")}
+              FCFA
+            </b>
+
+          </div>
+        `).join("")
+
+        : `
+          <div class="card">
+            Aucun mouvement.
+          </div>
+        `;
+
+  } catch (error) {
+
+    toast(error.message);
+  }
 }
 
-}catch(x){
-$("authMsg").textContent=x.message
+
+/* ============================================================
+   DÉCONNEXION
+   ============================================================ */
+
+function logout() {
+
+  localStorage.removeItem("bz_token");
+
+  token = null;
+
+  location.reload();
 }
-};
 
-const googleBtn = $("googleBtn");
 
-if(googleBtn){
-  googleBtn.onclick = () => {
-    window.location.href = "/api/auth/google";
-  };
+/* ============================================================
+   MÉTHODES DE PAIEMENT
+   ============================================================ */
+
+async function loadPayoutMethods() {
+
+  try {
+
+    const data =
+      await api("/api/payout-methods");
+
+    const methods =
+      data.methods || [];
+
+    const currency =
+      data.country &&
+      data.country.currency
+        ? data.country.currency
+        : "FCFA";
+
+
+    $("wmethod").innerHTML =
+      methods.map(method => `
+        <option value="${method.id}">
+          ${esc(method.name)}
+          · min
+          ${Number(method.min_amount)
+            .toLocaleString("fr-FR")}
+          ${esc(currency)}
+        </option>
+      `).join("");
+
+  } catch (error) {
+
+    toast(error.message);
+  }
+}
+
+
+/* ============================================================
+   VÉRIFICATION DU NUMÉRO
+   ============================================================ */
+
+async function requestVerification() {
+
+  try {
+
+    const data =
+      await api(
+        "/api/verification/request",
+        {
+          method: "POST"
+        }
+      );
+
+    toast(
+      data.message ||
+      "Demande envoyée."
+    );
+
+  } catch (error) {
+
+    toast(error.message);
+  }
+}
+
+
+async function confirmVerification() {
+
+  try {
+
+    const code =
+      $("vcode").value.trim();
+
+    if (!code) {
+      throw Error(
+        "Veuillez saisir le code de vérification."
+      );
+    }
+
+    const data =
+      await api(
+        "/api/verification/confirm",
+        {
+          method: "POST",
+
+          body: JSON.stringify({
+            code
+        })
+    );
+
+    toast(
+      data.message ||
+      "Numéro vérifié."
+    );
+
+    await load();
+
+  } catch (error) {
+
+    toast(error.message);
+  }
   }
   
-function logout(){
-localStorage.removeItem("bz_token");
-token=null;
-location.reload()
-}
+/* ============================================================
+   RETRAIT
+   ============================================================ */
 
-async function loadPayoutMethods(){
-try{
-let d=await api("/api/payout-methods");
-let rows=d.methods||[];
+async function withdraw() {
 
-$("wmethod").innerHTML=rows.map(x=>
-`<option value="${x.id}">
-${esc(x.name)} · min ${Number(x.min_amount).toLocaleString("fr-FR")} ${esc(d.country.currency)}
-</option>`
-).join("");
+  try {
 
-}catch(e){
-toast(e.message)
-}
-}
+    const methodId =
+      Number($("wmethod").value);
 
-async function requestVerification(){
-try{
-let d=await api("/api/verification/request",{method:"POST"});
-toast(d.message)
-}catch(e){
-toast(e.message)
-}
-}
+    const account =
+      $("waccount").value.trim();
 
-async function confirmVerification(){
-try{
-let d=await api(
-"/api/verification/confirm",
-{
-method:"POST",
-body:JSON.stringify({code:$("vcode").value})
-}
-);
-toast(d.message||"Numéro vérifié");
-load()
-}catch(e){
-toast(e.message)
-}
-}
+    const amount =
+      Number($("wamount").value);
+
+
+    if (!methodId) {
+      throw Error(
+        "Veuillez sélectionner un moyen de paiement."
+      );
+    }
+
+    if (!account) {
+      throw Error(
+        "Veuillez saisir votre compte ou numéro de paiement."
+      );
+    }
+
+    if (!amount || amount < 1000) {
+      throw Error(
+        "Le montant minimum de retrait est de 1 000 FCFA."
+      );
+    }
+
+
+    const idempotencyKey =
+      crypto.randomUUID
+        ? crypto.randomUUID()
+        : String(Date.now());
+
+
+    const data =
+      await api(
+        "/api/payout-requests",
+        {
+          method: "POST",
+
+          headers: {
+            "Idempotency-Key":
+              idempotencyKey
+          },
+
+          body: JSON.stringify({
+            method_id: methodId,
+            account,
+            amount
+          })
+        }
+      );
+
+
+    toast(
+      data.message ||
+      "Demande de retrait enregistrée."
+    );
+
+    await load();
+
+    await loadWithdrawals();
+
+  } catch (error) {
+
+    toast(error.message);
+  }
+  }
   
-async function withdraw(){
-try{
-let d=await api(
-"/api/payout-requests",
-{
-method:"POST",
-headers:{
-"Idempotency-Key":
-crypto.randomUUID?
-crypto.randomUUID():
-String(Date.now())
-},
-body:JSON.stringify({
-method_id:Number($("wmethod").value),
-account:$("waccount").value,
-amount:Number($("wamount").value)
-})
-}
-);
+  /* ============================================================
+   DEMANDES DE RETRAIT
+   ============================================================ */
 
-toast(d.message);
-load();
-loadWithdrawals();
+async function loadWithdrawals() {
 
-}catch(e){
-toast(e.message)
-}
-}
+  try {
 
-async function loadWithdrawals(){
-try{
-let rows=await api("/api/payout-requests");
+    const rows =
+      await api("/api/payout-requests");
 
-$("withdrawals").innerHTML=rows.length?
-rows.map(w=>`
-<div class="row">
-<span>
-${esc(w.method)} · ${esc(w.account)}<br>
-<small class="muted">${esc(w.created_at)}</small>
-</span>
-<b>
-${Number(w.amount).toLocaleString("fr-FR")}
-${esc(w.currency)} · ${esc(w.status)}
-</b>
-</div>
-`).join("")
-:
-`<div class="muted">Aucune demande.</div>`;
+    $("withdrawals").innerHTML =
+      rows.length
 
-}catch(e){
-toast(e.message)
-}
-}
+        ? rows.map(withdrawal => `
+          <div class="row">
 
-function esc(s){
-return String(s).replace(
-/[&<>"']/g,
-m=>({
-"&":"&amp;",
-"<":"&lt;",
-">":"&gt;",
-'"':"&quot;",
-"'":"&#039;"
-}[m])
-)
-}
+            <span>
+              ${esc(withdrawal.method)}
+              ·
+              ${esc(withdrawal.account)}
+
+              <br>
+
+              <small class="muted">
+                ${esc(withdrawal.created_at)}
+              </small>
+            </span>
+
+            <b>
+              ${Number(withdrawal.amount)
+                .toLocaleString("fr-FR")}
+
+              ${esc(withdrawal.currency)}
+
+              ·
+
+              ${esc(withdrawal.status)}
+            </b>
+
+          </div>
+        `).join("")
+
+        : `
+          <div class="muted">
+            Aucune demande.
+          </div>
+        `;
+
+  } catch (error) {
+
+    toast(error.message);
+  }
+  }
+  
+/* ============================================================
+   LIENS CONDITIONS / CONFIDENTIALITÉ
+   ============================================================ */
+
+$("termsLink").onclick = event => {
+
+  event.preventDefault();
+
+  toast(
+    "Les Conditions d'utilisation seront disponibles prochainement."
+  );
+};
+
+
+$("privacyLink").onclick = event => {
+
+  event.preventDefault();
+
+  toast(
+    "La Politique de confidentialité sera disponible prochainement."
+  );
+};
+
+/* ============================================================
+   INITIALISATION
+   ============================================================ */
 
 loadCountries();
+
+showAuth("register");
+
 load();
 
 </script>
+
 </body>
 </html>
+
+
+  
