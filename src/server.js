@@ -1,5 +1,5 @@
 
-const { env } = require('./config/env');
+const env = require('./config/env');
 const app = require('./app');
 const { initDb } = require('./config/database');
 
