@@ -214,10 +214,36 @@ return d
 }
 
 async function loadCountries(){
-try{
-let cs=await fetch("/api/countries").then(r=>r.json());
-$("country").innerHTML=cs.map(c=>`<option value="${c.code}">${esc(c.name)} (${c.currency})</option>`).join("");
-}catch(e){}
+  try{
+    let r=await fetch("/api/countries");
+    let cs=await r.json();
+
+    if(!Array.isArray(cs) || !cs.length){
+      throw Error("Pays indisponibles");
+    }
+
+    $("country").innerHTML=cs.map(c=>
+      `<option value="${esc(c.code)}">${esc(c.name)} (${esc(c.currency)})</option>`
+    ).join("");
+
+  }catch(e){
+
+    $("country").innerHTML=`
+      <option value="CG" selected>République du Congo (+242)</option>
+      <option value="CD">République démocratique du Congo (+243)</option>
+      <option value="GA">Gabon (+241)</option>
+      <option value="CM">Cameroun (+237)</option>
+      <option value="CI">Côte d'Ivoire (+225)</option>
+      <option value="SN">Sénégal (+221)</option>
+      <option value="NG">Nigeria (+234)</option>
+      <option value="GH">Ghana (+233)</option>
+      <option value="KE">Kenya (+254)</option>
+      <option value="ZA">Afrique du Sud (+27)</option>
+    `;
+
+  }
+
+  $("country").value="CG";
 }
 
 async function load(){
