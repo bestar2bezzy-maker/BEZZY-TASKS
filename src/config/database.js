@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
-const { env } = require('./env');
+const env = require('./env');
 
 let db;
 
