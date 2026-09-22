@@ -1,7 +1,7 @@
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
-const env = require('./config/env');
+const { env } = require('./config/env');
 const requestId = require('./middleware/requestId');
 const rateLimit = require('./middleware/rateLimit');
 const api = require('./routes');
