@@ -546,8 +546,11 @@ function showAuth(mode) {
     );
 
   $("googleRegisterBlock")
-    .classList
-    .remove("hidden");
+  .classList
+  .toggle(
+    "hidden",
+    false
+  );
 
   $("authTitle").textContent =
     register
