@@ -999,21 +999,23 @@ router.post('/auth/register', async (req, res, next) => {
 
 
     db.prepare(`
-      INSERT INTO users (
-        id,
-        email,
-        phone,
-        country_code,
-        password_hash
-      )
-      VALUES (?, ?, ?, ?, ?)
-    `).run(
-      userId,
-      normalizedEmail,
-      internationalPhone,
-      countryCode,
-      passwordHash
-    );
+  INSERT INTO users (
+    id,
+    email,
+    phone,
+    country_code,
+    password_hash,
+    full_name
+  )
+  VALUES (?, ?, ?, ?, ?, ?)
+`).run(
+  userId,
+  normalizedEmail,
+  internationalPhone,
+  countryCode,
+  passwordHash,
+  fullName ? String(fullName).trim() : null
+);
 
 
     /*
