@@ -1024,26 +1024,33 @@ if (normalizedReferralCode) {
 
     const userId = crypto.randomUUID();
 
+    const ownReferralCode =
+  'BZ' +
+  crypto.randomBytes(4)
+    .toString('hex')
+    .toUpperCase();
 
     db.prepare(`
   INSERT INTO users (
   id,
-  email,
-  phone,
-  country_code,
-  password_hash,
-  full_name,
-  referred_by_code
+email,
+phone,
+country_code,
+password_hash,
+full_name,
+referral_code,
+referred_by_code
 )
-VALUES (?, ?, ?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 `).run(
     userId,
-  normalizedEmail,
-  internationalPhone,
-  countryCode,
-  passwordHash,
-  fullName ? String(fullName).trim() : null,
-  normalizedReferralCode
+normalizedEmail,
+internationalPhone,
+countryCode,
+passwordHash,
+fullName ? String(fullName).trim() : null,
+ownReferralCode,
+normalizedReferralCode
 
     /*
      * ========================================================
