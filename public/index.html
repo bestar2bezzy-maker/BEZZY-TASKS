@@ -100,25 +100,6 @@ header{position:sticky;top:0;z-index:5;background:rgba(5,13,9,.88);backdrop-filt
         >
 
       </div>
-
-<div class="referral-card" id="referralCard">
-  <div class="referral-title">🎁 Mon code de parrainage</div>
-
-  <div class="referral-row">
-    <strong id="myReferralCode">—</strong>
-
-    <button
-      type="button"
-      id="copyReferralBtn"
-    >
-      Copier
-    </button>
-  </div>
-
-  <div class="referral-hint">
-    Partage ton code et invite de nouveaux utilisateurs sur Bezzy Tasks.
-  </div>
-</div>
      
       <div class="field">
 
@@ -388,6 +369,30 @@ header{position:sticky;top:0;z-index:5;background:rgba(5,13,9,.88);backdrop-filt
 <div class="stat"><div class="muted">Compte</div><b id="phoneShow">—</b></div>
 <div class="stat"><div class="muted">Statut</div><b class="gold">Actif</b></div>
 </div>
+
+ <div class="card" id="referralCard" style="margin-top:14px">
+  <div class="gold" style="font-weight:900">
+    🎁 Mon code de parrainage
+  </div>
+
+  <div style="display:flex;align-items:center;gap:10px;margin-top:12px">
+    <strong id="myReferralCode" style="font-size:22px;letter-spacing:1px">
+      —
+    </strong>
+
+    <button
+      type="button"
+      id="copyReferralBtn"
+      class="secondary"
+    >
+      Copier
+    </button>
+  </div>
+
+  <div class="small muted" style="margin-top:8px">
+    Partage ton code et invite de nouveaux utilisateurs sur Bezzy Tasks.
+  </div>
+ </div>
 
 <div class="tabs">
 <button class="tab active" data-tab="offers">🎮 Jeux & applications</button>
