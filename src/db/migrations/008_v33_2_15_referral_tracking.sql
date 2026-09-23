@@ -1,0 +1,2 @@
+ALTER TABLE users
+ADD COLUMN referred_by_code TEXT;
