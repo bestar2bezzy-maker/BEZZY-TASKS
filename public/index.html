@@ -913,11 +913,13 @@ $("authForm").onsubmit = async event => {
      */
 
     const payload = {
-      phone,
-      email,
-      password,
-      country_code: countryCode
-    };
+  fullName,
+  referralCode: referralCode || null,
+  phone,
+  email,
+  password,
+  country_code: countryCode
+};
 
 
     const data =
