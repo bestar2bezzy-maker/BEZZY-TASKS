@@ -814,10 +814,12 @@ router.post('/auth/register', async (req, res, next) => {
 
     const {
   identifier,
+  fullName,
   email,
   phone,
   country_code = 'CG',
-  password
+  password,
+  referralCode
 } = req.body || {};
 
 
