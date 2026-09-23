@@ -976,6 +976,33 @@ router.post('/auth/register', async (req, res, next) => {
       });
     }
 
+    /*
+ * ========================================================
+ * VALIDATION DU CODE DE PARRAINAGE
+ * ========================================================
+ */
+
+const normalizedReferralCode =
+  referralCode
+    ? String(referralCode).trim()
+    : null;
+
+if (normalizedReferralCode) {
+  const referralUser = db.prepare(`
+    SELECT id
+    FROM users
+    WHERE referral_code = ?
+    LIMIT 1
+  `).get(normalizedReferralCode);
+
+  if (!referralUser) {
+    return res.status(400).json({
+      error: 'INVALID_REFERRAL_CODE',
+      message: 'Code de parrainage invalide'
+    });
+  }
+}
+
 
     /*
      * ========================================================
