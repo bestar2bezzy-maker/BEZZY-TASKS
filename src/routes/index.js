@@ -1017,7 +1017,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?)
   passwordHash,
   fullName ? String(fullName).trim() : null,
   referralCode ? String(referralCode).trim() : null
-
+);
 
     /*
      * ========================================================
