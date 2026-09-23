@@ -2345,16 +2345,18 @@ router.get('/me', requireAuth, (req, res, next) => {
 
     const user = db.prepare(`
       SELECT
-        id,
-        email,
-        phone,
-        country_code,
-        referral_code,
-        role,
-        status,
-        email_verified_at,
-        created_at
-      FROM users
+  id,
+  email,
+  phone,
+  country_code,
+  referral_code,
+  referred_by_code,
+  full_name,
+  role,
+  status,
+  email_verified_at,
+  created_at
+FROM users
       WHERE id = ?
       LIMIT 1
     `).get(req.user.sub);
