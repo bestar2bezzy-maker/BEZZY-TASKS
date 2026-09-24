@@ -1916,10 +1916,11 @@ user = db.prepare(`
      * ========================================================
      */
 
-    const accessToken = signAccessToken({
-      sub: user.id,
-      role: user.role || 'USER'
-    });
+    signAccessToken({
+  id: user.id,
+  role: user.role || 'USER',
+  country_code: user.country_code || 'CG'
+});
 
     return res.status(200).json({
       success: true,
@@ -2336,11 +2337,11 @@ db.prepare(`
      * ========================================================
      */
 
-    const accessToken =
-      signAccessToken({
-        sub: user.id,
-        role: user.role || 'USER'
-      });
+    signAccessToken({
+  id: user.id,
+  role: user.role || 'USER',
+  country_code: user.country_code || 'CG'
+});
 
 
     /*
