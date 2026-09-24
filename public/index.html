@@ -1115,6 +1115,26 @@ async function loadOffers() {
 
   try {
 
+   const copyReferralBtn = $("copyReferralBtn");
+
+if (copyReferralBtn) {
+  copyReferralBtn.onclick = async () => {
+    const code = $("myReferralCode")?.textContent?.trim();
+
+    if (!code || code === "—") {
+      toast("Code de parrainage indisponible");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(code);
+      toast("Code de parrainage copié !");
+    } catch (error) {
+      toast("Impossible de copier le code");
+    }
+  };
+ }
+
     const rows =
       await api("/api/offers");
 
