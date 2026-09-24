@@ -1051,12 +1051,11 @@ passwordHash,
 fullName ? String(fullName).trim() : null,
 ownReferralCode,
 normalizedReferralCode
+);
 
     /*
      * ========================================================
      * TOKEN VERIFICATION EMAIL
-     * ========================================================
-     */
 
     /*
      * Suppression des anciens tokens non utilisés.
