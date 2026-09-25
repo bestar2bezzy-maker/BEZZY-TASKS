@@ -224,7 +224,197 @@ L'équipe Bezzy Tasks
   return result;
 }
 
+function buildPasswordResetUrl(token) {
+  const baseUrl = String(env.APP_BASE_URL || '').replace(/\/+$/, '');
+
+  if (!baseUrl) {
+    throw new Error('APP_BASE_URL is not configured');
+  }
+
+  const url = new URL('/api/auth/reset-password', baseUrl);
+
+  url.searchParams.set('token', token);
+
+  return url.toString();
+}
+
+
+async function sendPasswordResetEmail({ to, token }) {
+  if (!to) {
+    throw new Error('Password reset email recipient is required');
+  }
+
+  if (!token) {
+    throw new Error('Password reset token is required');
+  }
+
+  const resend = getResendClient();
+
+  const resetUrl = buildPasswordResetUrl(token);
+
+  const result = await resend.emails.send({
+    from: env.EMAIL_FROM,
+    to: [to],
+    subject: 'Réinitialisation de votre mot de passe — Bezzy Tasks',
+
+    text: `
+Bonjour,
+
+Une demande de réinitialisation du mot de passe de votre compte Bezzy Tasks a été effectuée.
+
+Pour choisir un nouveau mot de passe, cliquez sur le lien suivant :
+
+${resetUrl}
+
+Ce lien est temporaire et ne peut être utilisé qu'une seule fois.
+
+Si vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet e-mail.
+
+L'équipe Bezzy Tasks
+`,
+
+    html: `
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Réinitialisation du mot de passe</title>
+</head>
+
+<body style="
+  margin:0;
+  padding:40px 20px;
+  background:#f4f6f8;
+  font-family:Arial,Helvetica,sans-serif;
+  color:#222;
+">
+
+  <div style="
+    max-width:600px;
+    margin:0 auto;
+    background:#ffffff;
+    border-radius:14px;
+    overflow:hidden;
+    box-shadow:0 4px 20px rgba(0,0,0,0.08);
+  ">
+
+    <div style="
+      padding:28px 24px;
+      text-align:center;
+      background:#111827;
+      color:#ffffff;
+    ">
+      <h1 style="margin:0;font-size:28px;">
+        Bezzy Tasks
+      </h1>
+
+      <p style="
+        margin:8px 0 0;
+        font-size:14px;
+        opacity:.85;
+      ">
+        Réinitialisation du mot de passe
+      </p>
+    </div>
+
+    <div style="padding:32px 24px;">
+
+      <h2 style="
+        margin-top:0;
+        font-size:22px;
+        color:#111827;
+      ">
+        Nouveau mot de passe
+      </h2>
+
+      <p style="
+        font-size:16px;
+        line-height:1.6;
+      ">
+        Bonjour,
+      </p>
+
+      <p style="
+        font-size:16px;
+        line-height:1.6;
+      ">
+        Une demande de réinitialisation du mot de passe de votre compte
+        <strong>Bezzy Tasks</strong> a été effectuée.
+      </p>
+
+      <div style="
+        text-align:center;
+        margin:32px 0;
+      ">
+        <a
+          href="${resetUrl}"
+          style="
+            display:inline-block;
+            padding:14px 24px;
+            background:#111827;
+            color:#ffffff;
+            text-decoration:none;
+            border-radius:8px;
+            font-size:16px;
+            font-weight:bold;
+          "
+        >
+          Réinitialiser mon mot de passe
+        </a>
+      </div>
+
+      <p style="
+        font-size:14px;
+        line-height:1.6;
+        color:#555;
+      ">
+        Ce lien est temporaire et ne peut être utilisé qu'une seule fois.
+      </p>
+
+      <p style="
+        font-size:14px;
+        line-height:1.6;
+        color:#555;
+      ">
+        Si vous n'êtes pas à l'origine de cette demande,
+        vous pouvez ignorer cet e-mail.
+      </p>
+
+    </div>
+
+    <div style="
+      padding:20px 24px;
+      background:#f9fafb;
+      text-align:center;
+      font-size:12px;
+      color:#777;
+    ">
+      © ${new Date().getFullYear()} Bezzy Tasks
+    </div>
+
+  </div>
+
+</body>
+</html>
+`
+  });
+
+  if (result && result.error) {
+    const message =
+      result.error.message ||
+      result.error.name ||
+      'Unknown Resend error';
+
+    throw new Error(`RESEND_ERROR: ${message}`);
+  }
+
+  return result;
+      }
+
 module.exports = {
   sendVerificationEmail,
-  buildVerificationUrl
+  buildVerificationUrl,
+  sendPasswordResetEmail,
+  buildPasswordResetUrl
 };
