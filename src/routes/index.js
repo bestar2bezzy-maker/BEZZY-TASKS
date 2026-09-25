@@ -12,7 +12,8 @@ const {
 } = require('../middleware/auth');
 
 const {
-  sendVerificationEmail
+  sendVerificationEmail,
+  sendPasswordResetEmail
 } = require('../services/email');
 
 const router = express.Router();
@@ -802,6 +803,588 @@ router.get('/countries', (req, res) => {
   res.json(getCountryList());
 });
 
+/*
+ * ============================================================
+ * PASSWORD RESET
+ * ============================================================
+ *
+ * Permet à un utilisateur :
+ *
+ * - de demander une réinitialisation par e-mail
+ * - de définir un nouveau mot de passe
+ *
+ * Les tokens sont :
+ * - aléatoires
+ * - temporaires
+ * - à usage unique
+ * - stockés uniquement sous forme hachée
+ */
+
+
+/*
+ * ============================================================
+ * FORGOT PASSWORD
+ * ============================================================
+ */
+
+router.post('/auth/forgot-password', async (req, res, next) => {
+  try {
+
+    const {
+      email
+    } = req.body || {};
+
+    const normalizedEmail = normalizeEmail(email);
+
+    if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
+      return res.status(400).json({
+        error: 'INVALID_EMAIL',
+        message: 'Please provide a valid email address'
+      });
+    }
+
+    const db = getDb();
+
+    const user = db.prepare(`
+      SELECT
+        id,
+        email,
+        email_verified_at
+      FROM users
+      WHERE LOWER(email) = LOWER(?)
+      LIMIT 1
+    `).get(normalizedEmail);
+
+
+    /*
+     * Réponse volontairement identique si l'adresse
+     * n'existe pas afin d'éviter la divulgation
+     * de comptes existants.
+     */
+    if (!user || !user.email_verified_at) {
+      return res.status(200).json({
+        success: true,
+        message:
+          'Si cette adresse est associée à un compte, un e-mail de réinitialisation sera envoyé.'
+      });
+    }
+
+
+    /*
+     * Supprimer les anciens tokens non utilisés.
+     */
+    db.prepare(`
+      DELETE FROM password_reset_tokens
+      WHERE user_id = ?
+        AND used_at IS NULL
+    `).run(user.id);
+
+
+    /*
+     * Générer un token cryptographiquement aléatoire.
+     */
+    const rawToken = crypto
+      .randomBytes(32)
+      .toString('hex');
+
+
+    /*
+     * Ne jamais stocker le token brut.
+     */
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(rawToken)
+      .digest('hex');
+
+
+    /*
+     * Validité :
+     * 30 minutes.
+     */
+    const expiresAt = new Date(
+      Date.now() + 30 * 60 * 1000
+    ).toISOString();
+
+
+    db.prepare(`
+      INSERT INTO password_reset_tokens (
+        user_id,
+        token_hash,
+        expires_at
+      )
+      VALUES (?, ?, ?)
+    `).run(
+      user.id,
+      tokenHash,
+      expiresAt
+    );
+
+
+    /*
+     * Envoyer l'e-mail.
+     */
+    try {
+
+      await sendPasswordResetEmail({
+        to: user.email,
+        token: rawToken
+      });
+
+    } catch (emailError) {
+
+      db.prepare(`
+        DELETE FROM password_reset_tokens
+        WHERE token_hash = ?
+      `).run(tokenHash);
+
+      console.error(
+        'PASSWORD_RESET_EMAIL_FAILED:',
+        emailError
+      );
+
+      return res.status(503).json({
+        error: 'PASSWORD_RESET_EMAIL_FAILED',
+        message:
+          'Impossible d’envoyer l’e-mail de réinitialisation. Veuillez réessayer plus tard.'
+      });
+    }
+
+
+    return res.status(200).json({
+      success: true,
+      message:
+        'Si cette adresse est associée à un compte, un e-mail de réinitialisation sera envoyé.'
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
+
+/*
+ * ============================================================
+ * RESET PASSWORD PAGE
+ * ============================================================
+ */
+
+router.get('/auth/reset-password', (req, res) => {
+
+  const token = String(
+    req.query.token || ''
+  ).trim();
+
+  if (!token) {
+    return res.status(400).send(`
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Bezzy Tasks — Réinitialisation</title>
+</head>
+
+<body style="
+margin:0;
+padding:40px 20px;
+background:#07140f;
+color:#fff;
+font-family:Arial,Helvetica,sans-serif;
+">
+
+<div style="
+max-width:500px;
+margin:0 auto;
+background:#0c2119;
+padding:28px;
+border-radius:16px;
+text-align:center;
+">
+
+<h1 style="color:#d8ad45;">BEZZY TASKS</h1>
+
+<h2>Lien invalide</h2>
+
+<p>
+Le lien de réinitialisation est invalide ou incomplet.
+</p>
+
+</div>
+
+</body>
+</html>
+`);
+  }
+
+
+  const safeToken = token
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+
+  return res.send(`
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta
+  name="viewport"
+  content="width=device-width,initial-scale=1.0"
+>
+
+<title>Bezzy Tasks — Nouveau mot de passe</title>
+
+</head>
+
+<body style="
+margin:0;
+padding:40px 20px;
+background:#07140f;
+color:#fff;
+font-family:Arial,Helvetica,sans-serif;
+">
+
+<div style="
+max-width:500px;
+margin:0 auto;
+background:#0c2119;
+border:1px solid #1d4434;
+padding:28px;
+border-radius:16px;
+">
+
+<h1 style="
+text-align:center;
+color:#d8ad45;
+">
+BEZZY TASKS
+</h1>
+
+<h2>Nouveau mot de passe</h2>
+
+<p style="color:#9eafa8;">
+Choisissez votre nouveau mot de passe.
+</p>
+
+<form id="resetForm">
+
+<input
+  id="password"
+  type="password"
+  minlength="8"
+  placeholder="Nouveau mot de passe"
+  autocomplete="new-password"
+  required
+  style="
+  width:100%;
+  box-sizing:border-box;
+  padding:13px;
+  margin:10px 0;
+  border-radius:10px;
+  border:1px solid #315a48;
+  background:#07140f;
+  color:#fff;
+"
+>
+
+<input
+  id="passwordConfirm"
+  type="password"
+  minlength="8"
+  placeholder="Confirmer le mot de passe"
+  autocomplete="new-password"
+  required
+  style="
+  width:100%;
+  box-sizing:border-box;
+  padding:13px;
+  margin:10px 0;
+  border-radius:10px;
+  border:1px solid #315a48;
+  background:#07140f;
+  color:#fff;
+"
+>
+
+<button
+  id="submitBtn"
+  type="submit"
+  style="
+  width:100%;
+  padding:14px;
+  margin-top:12px;
+  border:0;
+  border-radius:10px;
+  background:#d8ad45;
+  color:#07140f;
+  font-weight:800;
+  cursor:pointer;
+"
+>
+Définir mon nouveau mot de passe
+</button>
+
+<p
+  id="message"
+  style="
+  min-height:22px;
+  margin-top:15px;
+"
+></p>
+
+</form>
+
+</div>
+
+<script>
+
+const token = "${safeToken}";
+
+const form = document.getElementById("resetForm");
+const password = document.getElementById("password");
+const passwordConfirm = document.getElementById("passwordConfirm");
+const message = document.getElementById("message");
+const submitBtn = document.getElementById("submitBtn");
+
+form.addEventListener("submit", async function(event) {
+
+  event.preventDefault();
+
+  const value = password.value;
+  const confirm = passwordConfirm.value;
+
+  message.textContent = "";
+
+  if (value.length < 8) {
+    message.textContent =
+      "Le mot de passe doit contenir au moins 8 caractères.";
+    message.style.color = "#ff8f8f";
+    return;
+  }
+
+  if (value !== confirm) {
+    message.textContent =
+      "Les deux mots de passe ne correspondent pas.";
+    message.style.color = "#ff8f8f";
+    return;
+  }
+
+  submitBtn.disabled = true;
+
+  try {
+
+    const response = await fetch(
+      "/api/auth/reset-password",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          token,
+          password: value
+        })
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.message ||
+        data.error ||
+        "Impossible de réinitialiser le mot de passe."
+      );
+    }
+
+    message.textContent =
+      "Mot de passe modifié avec succès. Vous pouvez maintenant vous connecter avec votre e-mail et votre nouveau mot de passe.";
+
+    message.style.color = "#71d49a";
+
+    form.reset();
+
+  } catch (error) {
+
+    message.textContent =
+      error.message ||
+      "Une erreur est survenue.";
+
+    message.style.color = "#ff8f8f";
+
+  } finally {
+
+    submitBtn.disabled = false;
+
+  }
+
+});
+
+</script>
+
+</body>
+</html>
+`);
+});
+
+
+/*
+ * ============================================================
+ * RESET PASSWORD ACTION
+ * ============================================================
+ */
+
+router.post('/auth/reset-password', async (req, res, next) => {
+  try {
+
+    const {
+      token,
+      password
+    } = req.body || {};
+
+    const rawToken =
+      String(token || '').trim();
+
+    const newPassword =
+      String(password || '');
+
+
+    if (!rawToken) {
+      return res.status(400).json({
+        error: 'RESET_TOKEN_REQUIRED',
+        message: 'Reset token is required'
+      });
+    }
+
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({
+        error: 'INVALID_PASSWORD',
+        message:
+          'Password must contain at least 8 characters'
+      });
+    }
+
+
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(rawToken)
+      .digest('hex');
+
+
+    const db = getDb();
+
+
+    const resetToken = db.prepare(`
+      SELECT
+        id,
+        user_id,
+        expires_at,
+        used_at
+      FROM password_reset_tokens
+      WHERE token_hash = ?
+      LIMIT 1
+    `).get(tokenHash);
+
+
+    if (!resetToken) {
+      return res.status(400).json({
+        error: 'INVALID_RESET_TOKEN',
+        message:
+          'Ce lien de réinitialisation est invalide ou expiré.'
+      });
+    }
+
+
+    if (resetToken.used_at) {
+      return res.status(400).json({
+        error: 'RESET_TOKEN_USED',
+        message:
+          'Ce lien de réinitialisation a déjà été utilisé.'
+      });
+    }
+
+
+    if (
+      !resetToken.expires_at ||
+      new Date(resetToken.expires_at).getTime() < Date.now()
+    ) {
+      return res.status(400).json({
+        error: 'RESET_TOKEN_EXPIRED',
+        message:
+          'Ce lien de réinitialisation est expiré.'
+      });
+    }
+
+
+    const passwordHash =
+      await bcrypt.hash(
+        newPassword,
+        12
+      );
+
+
+    const updateUser = db.prepare(`
+      UPDATE users
+      SET password_hash = ?
+      WHERE id = ?
+    `);
+
+
+    const markTokenUsed = db.prepare(`
+      UPDATE password_reset_tokens
+      SET used_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `);
+
+
+    const transaction = db.transaction(() => {
+
+      const result = updateUser.run(
+        passwordHash,
+        resetToken.user_id
+      );
+
+      if (!result.changes) {
+        throw new Error('USER_NOT_FOUND');
+      }
+
+      markTokenUsed.run(
+        resetToken.id
+      );
+
+      /*
+       * Invalider les autres tokens de réinitialisation
+       * encore actifs pour ce compte.
+       */
+      db.prepare(`
+        UPDATE password_reset_tokens
+        SET used_at = CURRENT_TIMESTAMP
+        WHERE user_id = ?
+          AND used_at IS NULL
+      `).run(resetToken.user_id);
+
+    });
+
+
+    transaction();
+
+
+    return res.status(200).json({
+      success: true,
+      message:
+        'Mot de passe modifié avec succès.'
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
 
 /*
  * ============================================================
