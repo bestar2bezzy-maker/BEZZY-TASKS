@@ -2337,7 +2337,7 @@ db.prepare(`
      * ========================================================
      */
 
-    signAccessToken({
+    const accessToken = signAccessToken({
   id: user.id,
   role: user.role || 'USER',
   country_code: user.country_code || 'CG'
