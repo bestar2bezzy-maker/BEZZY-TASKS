@@ -1916,16 +1916,16 @@ user = db.prepare(`
      * ========================================================
      */
 
-    signAccessToken({
+    const accessToken = signAccessToken({
   id: user.id,
   role: user.role || 'USER',
   country_code: user.country_code || 'CG'
 });
 
-    return res.status(200).json({
-      success: true,
-      access_token: accessToken,
-      token: accessToken,
+return res.status(200).json({
+  success: true,
+  access_token: accessToken,
+  token: accessToken,
       user: {
         id: user.id,
         email: user.email,
