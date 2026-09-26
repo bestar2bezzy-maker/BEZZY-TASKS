@@ -861,12 +861,12 @@ router.post('/auth/forgot-password', async (req, res, next) => {
      * n'existe pas afin d'éviter la divulgation
      * de comptes existants.
      */
-    if (!user || !user.email_verified_at) {
-      return res.status(200).json({
-        success: true,
-        message:
-          'Si cette adresse est associée à un compte, un e-mail de réinitialisation sera envoyé.'
-      });
+    if (!user) {
+  return res.status(200).json({
+    success: true,
+    message:
+      'Si cette adresse est associée à un compte, un e-mail de réinitialisation sera envoyé.'
+  });
     }
 
 
