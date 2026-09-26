@@ -770,106 +770,340 @@ header{
 
 </section>
 <section id="appView" class="hidden">
-<div class="hero">
-<div class="card">
-<p class="gold">TABLEAU DE BORD</p>
-<h1>Gagnez en réalisant des <span class="gold">missions utiles.</span></h1>
-<p class="muted">Les campagnes sont fournies par des partenaires. Un clic ne donne jamais automatiquement droit à une récompense.</p>
-</div>
 
-<div class="card">
-<div class="muted">Solde disponible</div>
-<div class="balance"><span id="balance">0</span> FCFA</div>
-<div class="small muted">Gains cumulés : <span id="earned">0</span> FCFA</div>
-</div>
-</div>
+  <div class="hero">
 
-<div class="grid">
-<div class="stat"><div class="muted">Code parrainage</div><b id="ref">—</b></div>
-<div class="stat"><div class="muted">Compte</div><b id="phoneShow">—</b></div>
-<div class="stat"><div class="muted">Statut</div><b class="gold">Actif</b></div>
-</div>
+    <div class="card heroMain">
+      <div>
+        <div class="eyebrow">BEZZY TASKS</div>
 
- <div class="card" id="referralCard" style="margin-top:14px">
-  <div class="gold" style="font-weight:900">
-    🎁 Mon code de parrainage
+        <h1>
+          Bienvenue sur<br>
+          <span class="gold">Bezzy Tasks</span> 👋
+        </h1>
+
+        <p class="muted">
+          Transforme ton temps en récompenses.
+          Réalise des missions proposées par nos partenaires
+          et fais évoluer tes gains.
+        </p>
+      </div>
+
+      <div class="actions">
+        <button class="primary" onclick="document.querySelector('[data-tab=&quot;withdraw&quot;]').click()">
+          💸 Retirer mes gains
+        </button>
+
+        <button class="secondary" onclick="document.querySelector('#offersPane').scrollIntoView({behavior:'smooth'})">
+          🎯 Voir les missions
+        </button>
+      </div>
+    </div>
+
+
+    <div class="card balanceCard">
+
+      <div>
+        <div class="balanceLabel">
+          SOLDE DISPONIBLE
+        </div>
+
+        <div class="balance">
+          <span id="balance">0</span> FCFA
+        </div>
+
+        <div class="small muted">
+          Gains cumulés :
+          <strong id="earned">0</strong> FCFA
+        </div>
+      </div>
+
+      <div class="small muted" style="margin-top:20px">
+        💰 Tes récompenses sont affichées en FCFA.
+      </div>
+
+    </div>
+
   </div>
 
-  <div style="display:flex;align-items:center;gap:10px;margin-top:12px">
-    <strong id="myReferralCode" style="font-size:22px;letter-spacing:1px">
-      —
-    </strong>
 
-    <button
-      type="button"
-      id="copyReferralBtn"
-      class="secondary"
-    >
-      Copier
+  <div class="quickGrid">
+
+    <a href="#offersPane"
+       class="quick"
+       onclick="document.querySelector('[data-tab=&quot;offers&quot;]').click()">
+      <div class="quickIcon">🎯</div>
+      <div>
+        <b>Missions</b>
+        <span>Gagne des récompenses</span>
+      </div>
+    </a>
+
+    <a href="#offersPane"
+       class="quick"
+       onclick="document.querySelector('[data-tab=&quot;offers&quot;]').click()">
+      <div class="quickIcon">🎮</div>
+      <div>
+        <b>Jeux & Apps</b>
+        <span>Découvre les offres</span>
+      </div>
+    </a>
+
+    <a href="#historyPane"
+       class="quick"
+       onclick="document.querySelector('[data-tab=&quot;history&quot;]').click()">
+      <div class="quickIcon">📜</div>
+      <div>
+        <b>Historique</b>
+        <span>Suivre tes activités</span>
+      </div>
+    </a>
+
+    <a href="#referralCard" class="quick">
+      <div class="quickIcon">🎁</div>
+      <div>
+        <b>Parrainage</b>
+        <span>Invite tes proches</span>
+      </div>
+    </a>
+
+  </div>
+
+
+  <div class="stats">
+
+    <div class="stat">
+      <div class="muted small">Code parrainage</div>
+      <b id="ref">—</b>
+    </div>
+
+    <div class="stat">
+      <div class="muted small">Compte</div>
+      <b id="phoneShow">—</b>
+    </div>
+
+    <div class="stat">
+      <div class="muted small">Statut</div>
+      <b class="gold">Actif</b>
+    </div>
+
+  </div>
+
+
+  <div class="sectionHead">
+    <div>
+      <h2>Missions pour vous</h2>
+      <p class="muted small">
+        Choisis une mission et commence à gagner.
+      </p>
+    </div>
+  </div>
+
+
+  <div id="offersPane">
+    <div id="offers" class="offers"></div>
+  </div>
+
+
+  <div class="sectionHead">
+    <div>
+      <h2>Comment gagner ?</h2>
+      <p class="muted small">
+        Trois étapes simples.
+      </p>
+    </div>
+  </div>
+
+
+  <div class="howGrid">
+
+    <div class="how">
+      <div class="howNum">1</div>
+      <h3>Choisis</h3>
+      <p class="small muted">
+        Sélectionne une mission ou une offre qui te convient.
+      </p>
+    </div>
+
+    <div class="how">
+      <div class="howNum">2</div>
+      <h3>Réalise</h3>
+      <p class="small muted">
+        Suis les instructions et termine correctement la mission.
+      </p>
+    </div>
+
+    <div class="how">
+      <div class="howNum">3</div>
+      <h3>Gagne</h3>
+      <p class="small muted">
+        Tes récompenses sont enregistrées sur ton compte.
+      </p>
+    </div>
+
+  </div>
+
+
+  <div id="referralCard" class="card referralCard" style="margin-top:14px">
+
+    <div>
+      <div class="eyebrow">PROGRAMME DE PARRAINAGE</div>
+
+      <h2 style="margin:7px 0">
+        Invite tes proches 🎁
+      </h2>
+
+      <p class="small muted" style="margin:0">
+        Partage ton code et invite de nouveaux utilisateurs
+        sur Bezzy Tasks.
+      </p>
+    </div>
+
+    <div>
+      <div class="refCode" id="myReferralCode">—</div>
+
+      <button
+        type="button"
+        id="copyReferralBtn"
+        class="secondary"
+        style="margin-top:9px">
+        Copier le code
+      </button>
+    </div>
+
+  </div>
+
+
+  <div class="tabs">
+
+    <button class="tab active" data-tab="offers">
+      🎮 Jeux & applications
     </button>
+
+    <button class="tab" data-tab="history">
+      📜 Historique
+    </button>
+
+    <button class="tab" data-tab="withdraw">
+      💸 Retrait
+    </button>
+
   </div>
 
-  <div class="small muted" style="margin-top:8px">
-    Partage ton code et invite de nouveaux utilisateurs sur Bezzy Tasks.
+
+  <div id="historyPane" class="hidden">
+    <div id="history" class="history"></div>
   </div>
- </div>
 
-<div class="tabs">
-<button class="tab active" data-tab="offers">🎮 Jeux & applications</button>
-<button class="tab" data-tab="history">📜 Historique</button>
-<button class="tab" data-tab="withdraw">💸 Retrait</button>
-</div>
 
-<div id="offersPane">
-<div id="offers" class="offers"></div>
-</div>
+  <div id="withdrawPane" class="hidden">
 
-<div id="historyPane" class="hidden">
-<div id="history" class="history"></div>
-</div>
+    <div class="card">
 
-<div id="withdrawPane" class="hidden">
-<div class="card">
-<h2>Retirer mes gains</h2>
-<p class="muted">Choisissez un moyen disponible dans votre pays. La vérification du téléphone est obligatoire avant le retrait.</p>
+      <h2>Retirer mes gains</h2>
 
-<div id="verifyBox" class="card" style="margin:12px 0">
-<b>🔐 Vérification du numéro</b>
-<p class="small muted">Cette version prépare l’envoi SMS réel. Aucun code n’est envoyé automatiquement tant qu’un fournisseur SMS n’est pas configuré.</p>
-<button class="secondary" onclick="requestVerification()">Demander un code</button>
+      <p class="muted">
+        Choisissez un moyen disponible dans votre pays.
+        La vérification du téléphone est obligatoire avant le retrait.
+      </p>
 
-<div class="field">
-<input id="vcode" inputmode="numeric" maxlength="6" placeholder="Code à 6 chiffres">
-<button class="secondary" onclick="confirmVerification()">Confirmer</button>
-</div>
-</div>
 
-<div class="field">
-<label>Mode de paiement</label>
-<select id="wmethod"></select>
-</div>
+      <div id="verifyBox" class="card" style="margin:12px 0">
 
-<div class="field">
-<label>Compte / numéro de paiement</label>
-<input id="waccount" placeholder="Numéro Mobile Money ou compte bancaire">
-</div>
+        <b>🔐 Vérification du numéro</b>
 
-<div class="field">
-<label>Montant (FCFA)</label>
-<input id="wamount" type="number" min="1000" placeholder="1000">
-</div>
+        <p class="small muted">
+          Cette version prépare l’envoi SMS réel.
+          Aucun code n’est envoyé automatiquement tant qu’un fournisseur
+          SMS n’est pas configuré.
+        </p>
 
-<button class="primary" onclick="withdraw()">Demander le retrait</button>
+        <button
+          class="secondary"
+          onclick="requestVerification()">
+          Demander un code
+        </button>
 
-<p class="small muted">Le site enregistre la demande. Le paiement réel doit ensuite être confirmé par le système de décaissement.</p>
-</div>
 
-<div class="card">
-<h3>Mes demandes</h3>
-<div id="withdrawals"></div>
-</div>
-</div>
-</section>
+        <div class="field">
+
+          <input
+            id="vcode"
+            inputmode="numeric"
+            maxlength="6"
+            placeholder="Code à 6 chiffres">
+
+          <button
+            class="secondary"
+            onclick="confirmVerification()">
+            Confirmer
+          </button>
+
+        </div>
+
+      </div>
+
+
+      <div class="field">
+
+        <label>Mode de paiement</label>
+
+        <select id="wmethod"></select>
+
+      </div>
+
+
+      <div class="field">
+
+        <label>Compte / numéro de paiement</label>
+
+        <input
+          id="waccount"
+          placeholder="Numéro Mobile Money ou compte bancaire">
+
+      </div>
+
+
+      <div class="field">
+
+        <label>Montant (FCFA)</label>
+
+        <input
+          id="wamount"
+          type="number"
+          min="1000"
+          placeholder="1000">
+
+      </div>
+
+
+      <button
+        class="primary"
+        onclick="withdraw()">
+        Demander le retrait
+      </button>
+
+
+      <p class="small muted">
+        Le site enregistre la demande.
+        Le paiement réel doit ensuite être confirmé par le système
+        de décaissement.
+      </p>
+
+    </div>
+
+
+    <div class="card">
+
+      <h3>Mes demandes</h3>
+
+      <div id="withdrawals"></div>
+
+    </div>
+
+  </div>
+
+          </section>
 </main>
 
 <div id="toast" class="toast"></div>
