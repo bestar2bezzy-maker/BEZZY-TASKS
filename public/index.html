@@ -258,6 +258,48 @@ header{position:sticky;top:0;z-index:5;background:rgba(5,13,9,.88);backdrop-filt
       Créer mon compte
     </button>
 
+     <div id="forgotPasswordBox" style="margin-top:12px;text-align:center">
+      <button
+        id="forgotPasswordBtn"
+        type="button"
+        class="secondary"
+        style="width:100%"
+      >
+        🔑 Mot de passe oublié ?
+      </button>
+    </div>
+
+    <div id="forgotPasswordForm" class="hidden" style="margin-top:12px">
+      <div class="field">
+        <label for="forgotEmail">E-mail de récupération</label>
+        <input
+          id="forgotEmail"
+          type="email"
+          inputmode="email"
+          autocomplete="email"
+          placeholder="exemple@email.com"
+        >
+      </div>
+
+      <button
+        id="sendResetBtn"
+        type="button"
+        class="primary"
+        style="width:100%"
+      >
+        Envoyer le lien de réinitialisation
+      </button>
+
+      <button
+        id="cancelForgotBtn"
+        type="button"
+        class="secondary"
+        style="width:100%;margin-top:8px"
+      >
+        Annuler
+      </button>
+    </div>
+
 </form>
     <div id="googleRegisterBlock" style="margin-top:18px">
 
@@ -548,6 +590,14 @@ async function api(url, options = {}) {
 function showAuth(mode) {
 
   authMode = mode;
+
+   if($("forgotPasswordForm")){
+    $("forgotPasswordForm").classList.add("hidden");
+  }
+
+  if($("forgotPasswordBox")){
+    $("forgotPasswordBox").classList.remove("hidden");
+  }
 
   const register =
     mode === "register";
