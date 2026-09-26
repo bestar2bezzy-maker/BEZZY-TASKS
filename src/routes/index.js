@@ -854,7 +854,15 @@ router.post('/auth/forgot-password', async (req, res, next) => {
       WHERE LOWER(email) = LOWER(?)
       LIMIT 1
     `).get(normalizedEmail);
-
+console.log(
+  'PASSWORD_RESET_DEBUG:',
+  JSON.stringify({
+    email: normalizedEmail,
+    userFound: !!user,
+    userId: user ? user.id : null,
+    emailVerified: user ? !!user.email_verified_at : null
+  })
+);
 
     /*
      * Réponse volontairement identique si l'adresse
@@ -930,6 +938,11 @@ router.post('/auth/forgot-password', async (req, res, next) => {
         token: rawToken
       });
 
+      console.log(
+  'PASSWORD_RESET_EMAIL_SENT:',
+  user.email
+);
+
     } catch (emailError) {
 
       db.prepare(`
@@ -942,6 +955,15 @@ router.post('/auth/forgot-password', async (req, res, next) => {
         emailError
       );
 
+console.error(
+  'PASSWORD_RESET_EMAIL_FAILED_DETAILS:',
+  JSON.stringify({
+    email: user.email,
+    name: emailError && emailError.name,
+    message: emailError && emailError.message
+  })
+);
+      
       return res.status(503).json({
         error: 'PASSWORD_RESET_EMAIL_FAILED',
         message:
