@@ -684,6 +684,107 @@ $("switchAuthBtn").onclick = () => {
 
 };
 
+ /* ============================================================
+   MOT DE PASSE OUBLIÉ
+   ============================================================ */
+
+const forgotPasswordBtn = $("forgotPasswordBtn");
+
+if(forgotPasswordBtn){
+  forgotPasswordBtn.onclick = () => {
+
+    $("forgotPasswordForm").classList.remove("hidden");
+    $("forgotPasswordBox").classList.add("hidden");
+
+    const currentEmail = $("email")
+      ? $("email").value.trim()
+      : "";
+
+    if(currentEmail){
+      $("forgotEmail").value = currentEmail;
+    }
+
+    $("forgotEmail").focus();
+    $("authMsg").textContent = "";
+  };
+}
+
+
+const cancelForgotBtn = $("cancelForgotBtn");
+
+if(cancelForgotBtn){
+  cancelForgotBtn.onclick = () => {
+
+    $("forgotPasswordForm").classList.add("hidden");
+    $("forgotPasswordBox").classList.remove("hidden");
+
+    $("forgotEmail").value = "";
+    $("authMsg").textContent = "";
+  };
+}
+
+
+const sendResetBtn = $("sendResetBtn");
+
+if(sendResetBtn){
+  sendResetBtn.onclick = async () => {
+
+    const email =
+      $("forgotEmail").value
+        .trim()
+        .toLowerCase();
+
+    if(!email){
+      $("authMsg").textContent =
+        "Veuillez saisir votre adresse e-mail.";
+      return;
+    }
+
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+      $("authMsg").textContent =
+        "Veuillez saisir une adresse e-mail valide.";
+      return;
+    }
+
+    sendResetBtn.disabled = true;
+
+    try{
+
+      const data = await api(
+        "/api/auth/forgot-password",
+        {
+          method: "POST",
+          body: JSON.stringify({ email })
+        }
+      );
+
+      $("authMsg").textContent =
+        data.message ||
+        "Si cette adresse est associée à un compte, un e-mail de réinitialisation sera envoyé.";
+
+      $("forgotPasswordForm")
+        .classList
+        .add("hidden");
+
+      $("forgotPasswordBox")
+        .classList
+        .remove("hidden");
+
+    }catch(error){
+
+      $("authMsg").textContent =
+        error.message ||
+        "Impossible d'envoyer le lien de réinitialisation.";
+
+    }finally{
+
+      sendResetBtn.disabled = false;
+
+    }
+
+  };
+     }
+
 
 /* ============================================================
    AFFICHER / MASQUER LES MOTS DE PASSE
