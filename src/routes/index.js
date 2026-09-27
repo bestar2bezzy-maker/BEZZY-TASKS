@@ -2993,9 +2993,7 @@ router.get('/me', requireAuth, (req, res, next) => {
         role,
         status,
         email_verified_at,
-        created_at,
-        balance,
-        total_earned
+        created_at
       FROM users
       WHERE id = ?
       LIMIT 1
@@ -3006,6 +3004,55 @@ router.get('/me', requireAuth, (req, res, next) => {
         error: 'USER_NOT_FOUND',
         message: 'User not found'
       });
+    }
+
+    const balanceRow = db.prepare(`
+      SELECT
+        COALESCE(
+          SUM(
+            CASE
+              WHEN direction = 'CREDIT'
+                THEN amount_minor
+              ELSE -amount_minor
+            END
+          ),
+          0
+        ) AS balance
+      FROM ledger_entries
+      WHERE user_id = ?
+    `).get(user.id);
+
+    const earnedRow = db.prepare(`
+      SELECT
+        COALESCE(
+          SUM(
+            CASE
+              WHEN direction = 'CREDIT'
+                THEN amount_minor
+              ELSE 0
+            END
+          ),
+          0
+        ) AS total_earned
+      FROM ledger_entries
+      WHERE user_id = ?
+    `).get(user.id);
+
+    return res.json({
+      user: {
+        ...user,
+        balance: Number(balanceRow.balance || 0),
+        total_earned: Number(earnedRow.total_earned || 0),
+        email_verified: Boolean(
+          user.email_verified_at
+        )
+      }
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
     }
 
     return res.json({
