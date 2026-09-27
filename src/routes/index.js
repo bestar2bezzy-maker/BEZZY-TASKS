@@ -2983,18 +2983,20 @@ router.get('/me', requireAuth, (req, res, next) => {
 
     const user = db.prepare(`
       SELECT
-  id,
-  email,
-  phone,
-  country_code,
-  referral_code,
-  referred_by_code,
-  full_name,
-  role,
-  status,
-  email_verified_at,
-  created_at
-FROM users
+        id,
+        email,
+        phone,
+        country_code,
+        referral_code,
+        referred_by_code,
+        full_name,
+        role,
+        status,
+        email_verified_at,
+        created_at,
+        balance,
+        total_earned
+      FROM users
       WHERE id = ?
       LIMIT 1
     `).get(req.user.sub);
@@ -3009,6 +3011,8 @@ FROM users
     return res.json({
       user: {
         ...user,
+        balance: Number(user.balance || 0),
+        total_earned: Number(user.total_earned || 0),
         email_verified: Boolean(
           user.email_verified_at
         )
@@ -3019,6 +3023,7 @@ FROM users
     next(error);
   }
 });
+
 
 
 /*
