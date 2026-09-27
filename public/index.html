@@ -205,10 +205,72 @@ header{
 }
 
 .offer{
-  padding:18px;
-  border-radius:18px;
-  background:#091c13;
-  border:1px solid var(--line)
+  position:relative;
+  padding:20px;
+  border-radius:20px;
+  background:linear-gradient(145deg,#0d281b,#081910);
+  border:1px solid var(--line);
+  box-shadow:0 10px 30px rgba(0,0,0,.22);
+  transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease
+}
+
+.offer:hover{
+  transform:translateY(-3px);
+  border-color:rgba(225,189,91,.45);
+  box-shadow:0 15px 35px rgba(0,0,0,.3)
+}
+
+.offerTop{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:12px
+}
+
+.offerType{
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  color:var(--green);
+  font-size:11px;
+  font-weight:900;
+  letter-spacing:.5px
+}
+
+.offerIcon{
+  width:34px;
+  height:34px;
+  display:grid;
+  place-items:center;
+  border-radius:11px;
+  background:#173c29;
+  font-size:17px
+}
+
+.offer h3{
+  margin:8px 0;
+  font-size:18px
+}
+
+.offer .reward{
+  white-space:nowrap
+}
+
+.offerMeta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:7px;
+  margin:14px 0;
+  font-size:11px;
+  color:var(--muted)
+}
+
+.offerMeta span{
+  padding:6px 9px;
+  border-radius:999px;
+  background:#102d1f;
+  border:1px solid #1d4932
 }
 
 .offer h3{margin:6px 0 7px}
