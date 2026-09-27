@@ -3053,25 +3053,6 @@ router.get('/me', requireAuth, (req, res, next) => {
     next(error);
   }
 });
-    }
-
-    return res.json({
-      user: {
-        ...user,
-        balance: Number(user.balance || 0),
-        total_earned: Number(user.total_earned || 0),
-        email_verified: Boolean(
-          user.email_verified_at
-        )
-      }
-    });
-
-  } catch (error) {
-    next(error);
-  }
-});
-
-
 
 /*
  * ============================================================
