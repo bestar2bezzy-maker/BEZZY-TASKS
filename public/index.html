@@ -401,35 +401,102 @@ header{
 @media(max-width:760px){
 
   header{
-    padding:12px 4%
+    padding:12px 4%;
+    min-height:54px
   }
 
   .wrap{
-    padding:16px 4% 32px
+    padding:16px 4% 34px
   }
 
   .hero{
-    grid-template-columns:1fr
+    grid-template-columns:1fr;
+    gap:10px
   }
 
   .heroMain{
-    min-height:225px
+    min-height:0;
+    padding:20px
+  }
+
+  .heroMain h1{
+    font-size:30px;
+    line-height:1.08
+  }
+
+  .heroMain .actions{
+    display:grid;
+    grid-template-columns:1fr;
+    width:100%
+  }
+
+  .heroMain .actions button{
+    width:100%;
+    min-height:48px
+  }
+
+  .balanceCard{
+    padding:20px
+  }
+
+  .balance{
+    font-size:36px;
+    line-height:1.1
   }
 
   .quickGrid{
-    grid-template-columns:repeat(2,1fr)
+    grid-template-columns:repeat(2,1fr);
+    gap:9px
+  }
+
+  .quick{
+    min-height:82px;
+    padding:13px;
+    gap:9px
+  }
+
+  .quickIcon{
+    width:38px;
+    height:38px;
+    flex-shrink:0
   }
 
   .stats{
-    grid-template-columns:1fr
+    grid-template-columns:1fr;
+    gap:8px
   }
 
   .offers{
-    grid-template-columns:1fr
+    grid-template-columns:1fr;
+    gap:10px
+  }
+
+  .offer{
+    padding:17px
+  }
+
+  .offerTop{
+    align-items:flex-start
+  }
+
+  .offer .actions{
+    display:grid;
+    grid-template-columns:1fr;
+    width:100%
+  }
+
+  .offer .actions button{
+    width:100%;
+    min-height:46px
+  }
+
+  .offerMeta{
+    line-height:1.35
   }
 
   .howGrid{
-    grid-template-columns:1fr
+    grid-template-columns:1fr;
+    gap:9px
   }
 
   .referralCard{
@@ -437,15 +504,45 @@ header{
     flex-direction:column
   }
 
-  .balance{
-    font-size:38px
+  .referralCard > div{
+    width:100%
   }
 
-  .sectionHead{
-    align-items:flex-start;
-    flex-direction:column
+  .referralCard .secondary{
+    width:100%;
+    min-height:44px
   }
-}
+
+  .tabs{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:7px
+  }
+
+  .tab{
+    width:100%;
+    min-height:46px
+  }
+
+  .field input,
+  .field select,
+  .field textarea{
+    min-height:46px;
+    font-size:16px
+  }
+
+  #withdrawPane .primary{
+    width:100%;
+    min-height:48px
+  }
+
+  .toast{
+    left:4%;
+    right:4%;
+    bottom:14px;
+    max-width:none
+  }
+  }
 </style>
 <header><div class="brand">BEZZY <span>TASKS</span></div><div id="headerActions"></div></header>
 <main class="wrap">
