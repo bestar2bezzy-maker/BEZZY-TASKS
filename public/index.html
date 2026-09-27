@@ -1953,63 +1953,81 @@ async function loadOffers() {
 
         ? rows.map(offer => `
 
-          <article class="offer">
+  <article class="offer">
 
-            <div class="small gold">
-              ${
-                offer.type === "game"
-                  ? "JEU"
-                  : "APPLICATION"
-              }
-            </div>
+    <div class="offerTop">
 
-            <h3>
-              ${esc(offer.title)}
-            </h3>
+      <div class="offerType">
+        <span class="offerIcon">
+          ${offer.type === "game" ? "🎮" : "📱"}
+        </span>
 
-            <p class="muted">
-              ${esc(offer.description)}
-            </p>
+        <span>
+          ${offer.type === "game"
+            ? "JEU"
+            : "APPLICATION"}
+        </span>
+      </div>
 
-            <div class="reward">
-              +${Number(offer.reward)
-                .toLocaleString("fr-FR")}
-              FCFA
-            </div>
+      <div class="reward">
+        +${Number(offer.reward)
+          .toLocaleString("fr-FR")}
+        FCFA
+      </div>
 
-            <div class="actions">
+    </div>
 
-              <button
-                class="primary"
-                onclick="startOffer(${offer.id})"
-              >
-                Tester l’offre ↗
-              </button>
 
-              ${
-                offer.completion_status
-                  ? `
-                    <span class="secondary">
-                      ${esc(
-                        offer.completion_status
-                      )}
-                    </span>
-                  `
-                  : ""
-              }
+    <h3>
+      ${esc(offer.title)}
+    </h3>
 
-            </div>
 
-            <p class="small muted">
-              Validation : partenaire/campagne.
-              Aucun gain sur simple clic.
-            </p>
+    <p class="muted">
+      ${esc(offer.description)}
+    </p>
 
-          </article>
 
-        `).join("")
+    <div class="offerMeta">
 
-        : `
+      <span>⚡ Mission rémunérée</span>
+
+      <span>✓ Validation partenaire</span>
+
+    </div>
+
+
+    <div class="actions">
+
+      <button
+        class="primary"
+        onclick="startOffer(${offer.id})">
+        Commencer la mission ↗
+      </button>
+
+      ${
+        offer.completion_status
+          ? `
+            <span class="secondary">
+              ${esc(offer.completion_status)}
+            </span>
+          `
+          : ""
+      }
+
+    </div>
+
+
+    <p class="small muted">
+      Aucun gain sur simple clic.
+      La récompense est créditée après validation réelle.
+    </p>
+
+  </article>
+
+`).join("")
+
+      `;
 
           <div class="card">
             Aucune campagne active pour le moment.
