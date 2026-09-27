@@ -1817,7 +1817,6 @@ if (copyReferralBtn) {
    BEZZY TASKS — PARTIE 2C
    TABLEAU DE BORD + OFFRES
    ============================================================ */
-
 async function load() {
 
   if (!token) {
@@ -1826,8 +1825,23 @@ async function load() {
 
   try {
 
-    const me =
+    const response =
       await api("/api/me");
+
+    /*
+     * Le backend renvoie :
+     *
+     * {
+     *   user: {
+     *     ...
+     *   }
+     * }
+     *
+     * On récupère donc le profil dans response.user.
+     */
+    const me =
+      response.user || response;
+
 
     $("authView")
       .classList
@@ -1838,24 +1852,44 @@ async function load() {
       .remove("hidden");
 
 
+    /*
+     * SOLDE
+     *
+     * Ces valeurs pourront venir directement
+     * du profil lorsque le backend les exposera.
+     */
     $("balance").textContent =
       Number(me.balance || 0)
         .toLocaleString("fr-FR");
 
     $("earned").textContent =
-      Number(me.total_earned || 0)
-        .toLocaleString("fr-FR");
+      Number(
+        me.total_earned ||
+        me.totalEarned ||
+        0
+      ).toLocaleString("fr-FR");
 
+
+    /*
+     * PARRAINAGE
+     */
     $("ref").textContent =
       me.referral_code || "—";
 
-   $("myReferralCode").textContent =
-  me.referral_code || "—";
+    $("myReferralCode").textContent =
+      me.referral_code || "—";
 
+
+    /*
+     * TELEPHONE
+     */
     $("phoneShow").textContent =
       me.phone || "—";
 
 
+    /*
+     * HEADER
+     */
     $("headerActions").innerHTML = `
       <button
         class="secondary"
@@ -1866,7 +1900,12 @@ async function load() {
     `;
 
 
-    if (me.role === "admin") {
+    /*
+     * ADMIN
+     */
+    if (
+      String(me.role || "").toLowerCase() === "admin"
+    ) {
 
       $("headerActions").innerHTML += `
         <a
@@ -1880,16 +1919,24 @@ async function load() {
     }
 
 
+    /*
+     * CHARGER LES MISSIONS
+     */
     await loadOffers();
 
   } catch (error) {
 
+    console.error(
+      "BEZZY LOAD ERROR:",
+      error
+    );
+
     logout();
 
   }
-}
+  }
 
-
+  
 /* ============================================================
    OFFRES
    ============================================================ */
