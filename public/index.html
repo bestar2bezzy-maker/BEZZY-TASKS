@@ -1632,7 +1632,66 @@ if(sendResetBtn){
   };
      }
 
+/* ============================================================
+   CENTRE D'AIDE BEZZY TASKS
+   ============================================================ */
 
+const helpBtn = $("helpBtn");
+const helpBox = $("helpBox");
+
+if (helpBtn && helpBox) {
+
+  helpBtn.addEventListener("click", () => {
+    helpBox.classList.toggle("hidden");
+
+    if (!helpBox.classList.contains("hidden")) {
+      helpBox.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest"
+      });
+    }
+  });
+
+  document.querySelectorAll(".helpOption").forEach((button) => {
+
+    button.addEventListener("click", () => {
+
+      const problem =
+        button.dataset.help ||
+        "J'ai besoin d'aide avec Bezzy Tasks.";
+
+      const message =
+        "Bonjour, j'ai besoin d'aide avec mon compte Bezzy Tasks.\n\n" +
+        "Mon problème : " +
+        problem;
+
+      /*
+       * Pour le moment, on copie automatiquement
+       * le message afin que l'utilisateur puisse
+       * le transmettre au support.
+       */
+
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(message)
+          .then(() => {
+            toast(
+              "Message d'aide copié. Vous pouvez maintenant le transmettre au support."
+            );
+          })
+          .catch(() => {
+            toast("Impossible de copier le message.");
+          });
+      } else {
+        toast(message);
+      }
+
+    });
+
+  });
+
+  }
+
+  
 /* ============================================================
    AFFICHER / MASQUER LES MOTS DE PASSE
    ============================================================ */
