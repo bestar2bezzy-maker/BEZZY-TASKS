@@ -925,7 +925,83 @@ header{
       et cliquez sur le lien de vérification pour activer votre compte.
     </p>
 
+<div
+  style="
+    text-align:center;
+    margin-top:18px;
+    padding-top:16px;
+    border-top:1px solid var(--line)
+  "
+>
+  <button
+    id="helpBtn"
+    type="button"
+    class="secondary"
+    style="
+      border:0;
+      color:var(--gold);
+      font-weight:800;
+      background:transparent
+    "
+  >
+    ❓ Besoin d'aide ?
+  </button>
+</div>
+
+<div
+  id="helpBox"
+  class="hidden"
+  style="
+    margin-top:14px;
+    padding:16px;
+    border-radius:16px;
+    background:#091c13;
+    border:1px solid var(--line)
+  "
+>
+  <strong class="gold">🛟 Centre d'aide Bezzy Tasks</strong>
+
+  <p class="small muted" style="line-height:1.5">
+    Vous rencontrez un problème avec votre compte ou vous n'arrivez pas
+    à accéder à la plateforme ? Nous sommes là pour vous aider.
+  </p>
+
+  <div style="display:grid;gap:8px">
+
+    <button
+      type="button"
+      class="secondary helpOption"
+      data-help="Je n'arrive pas à me connecter à mon compte."
+    >
+      🔐 Problème de connexion
+    </button>
+
+    <button
+      type="button"
+      class="secondary helpOption"
+      data-help="Je n'ai pas reçu mon e-mail de vérification."
+    >
+      📧 E-mail de vérification
+    </button>
+
+    <button
+      type="button"
+      class="secondary helpOption"
+      data-help="J'ai oublié mon mot de passe."
+    >
+      🔑 Mot de passe oublié
+    </button>
+
+    <button
+      type="button"
+      class="secondary helpOption"
+      data-help="Je rencontre un autre problème avec Bezzy Tasks."
+    >
+      🐞 Signaler un autre problème
+    </button>
+
   </div>
+</div>
 
 </section>
 <section id="appView" class="hidden">
