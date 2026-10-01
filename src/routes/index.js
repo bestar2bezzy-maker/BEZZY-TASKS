@@ -2459,30 +2459,35 @@ user = db.prepare(`
     /*
      * Identifiants incorrects.
      */
-    if (!user) {
-      return res.status(401).json({
-        error: 'INVALID_CREDENTIALS',
-        message:
-          'Invalid email/phone or password'
-      });
-    }
+ if (!user) {
+  return res.status(401).json({
+    error: 'LOGIN_USER_NOT_FOUND',
+    message:
+      'Compte introuvable avec cet e-mail ou numéro.'
+  });
+}
 
-    /*
-     * Vérification du mot de passe.
-     */
-    const passwordOk =
-      await bcrypt.compare(
-        String(password),
-        user.password_hash
-      );
+if (!user.password_hash) {
+  return res.status(401).json({
+    error: 'LOGIN_NO_PASSWORD',
+    message:
+      'Ce compte ne possède pas de mot de passe utilisable.'
+  });
+}
 
-    if (!passwordOk) {
-      return res.status(401).json({
-        error: 'INVALID_CREDENTIALS',
-        message:
-          'Invalid email/phone or password'
-      });
-    }
+const passwordOk =
+  await bcrypt.compare(
+    String(password),
+    user.password_hash
+  );
+
+if (!passwordOk) {
+  return res.status(401).json({
+    error: 'LOGIN_PASSWORD_MISMATCH',
+    message:
+      'Le mot de passe saisi ne correspond pas à ce compte.'
+  });
+  }
 
     /*
      * Vérification du statut.
