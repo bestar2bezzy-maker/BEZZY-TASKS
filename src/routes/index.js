@@ -2875,52 +2875,22 @@ router.get('/auth/google/callback', async (req, res, next) => {
 
         /*
          * ====================================================
-         * NOUVEAU COMPTE GOOGLE
+         * COMPTE GOOGLE INEXISTANT
          * ====================================================
          *
-         * Google ne fournit pas le numéro de téléphone
-         * de manière garantie.
+         * Un compte Google ne doit PAS créer automatiquement
+         * un compte Bezzy Tasks.
          *
-         * Le téléphone pourra être complété plus tard.
+         * L'utilisateur doit d'abord créer son compte
+         * Bezzy Tasks.
          */
 
-        const userId =
-          crypto.randomUUID();
-
-const randomPassword =
-  crypto.randomBytes(32).toString('hex');
-
-const passwordHash =
-  await bcrypt.hash(randomPassword, 12);
-
-db.prepare(`
-  INSERT INTO users (
-    id,
-    email,
-    phone,
-    country_code,
-    password_hash,
-    google_sub,
-    email_verified_at
-  )
-  VALUES (?, ?, ?, ?, ?, ?, ?)
-`).run(
-  userId,
-  googleEmail,
-  null,
-  'CG',
-  passwordHash,
-  googleSub,
-  new Date().toISOString()
-);
-
-
-        user = db.prepare(`
-          SELECT *
-          FROM users
-          WHERE id = ?
-          LIMIT 1
-        `).get(userId);
+        return res.redirect(
+          '/?google_error=' +
+          encodeURIComponent(
+            'Aucun compte Bezzy Tasks n’est associé à cette adresse Google. Créez d’abord votre compte.'
+          )
+        );
       }
     }
 
