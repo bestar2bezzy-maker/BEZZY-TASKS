@@ -58,6 +58,36 @@ header{
 .muted{color:var(--muted)}
 .small{font-size:13px}
 
+  /* ============================================================
+   BEZZY TASKS — TRANSITION DES SECTIONS
+   ============================================================ */
+
+#offersPane:not(.hidden),
+#historyPane:not(.hidden),
+#withdrawPane:not(.hidden){
+  animation:bezzyPaneIn .28s ease both;
+}
+
+@keyframes bezzyPaneIn{
+  from{
+    opacity:0;
+    transform:translateY(8px);
+  }
+
+  to{
+    opacity:1;
+    transform:translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion:reduce){
+  #offersPane:not(.hidden),
+  #historyPane:not(.hidden),
+  #withdrawPane:not(.hidden){
+    animation:none;
+  }
+}
+
 .hero{
   display:grid;
   grid-template-columns:1.35fr .9fr;
