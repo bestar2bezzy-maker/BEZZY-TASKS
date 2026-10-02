@@ -123,6 +123,66 @@ header{
   border-radius:12px
 }
 
+/* ============================================================
+   BEZZY TASKS — ANIMATIONS INTERFACE
+   ============================================================ */
+
+.primary,
+.secondary,
+.tab,
+.quick,
+#copyReferralBtn {
+  transition:
+    transform .18s ease,
+    box-shadow .18s ease,
+    border-color .18s ease,
+    background-color .18s ease,
+    filter .18s ease;
+  -webkit-tap-highlight-color:transparent;
+}
+
+.primary:hover,
+.secondary:hover,
+.tab:hover,
+.quick:hover,
+#copyReferralBtn:hover {
+  transform:translateY(-2px);
+}
+
+.primary:active,
+.secondary:active,
+.tab:active,
+.quick:active,
+#copyReferralBtn:active {
+  transform:scale(.96);
+}
+
+.primary:focus-visible,
+.secondary:focus-visible,
+.tab:focus-visible,
+.quick:focus-visible,
+#copyReferralBtn:focus-visible {
+  outline:2px solid var(--gold);
+  outline-offset:3px;
+}
+
+.quick:hover {
+  border-color:rgba(225,189,91,.55);
+  box-shadow:0 12px 30px rgba(0,0,0,.28);
+}
+
+.quick:active {
+  transform:scale(.97);
+}
+
+.primary:active {
+  filter:brightness(.92);
+}
+
+.tab:active {
+  transform:scale(.95);
+}  
+
 .actions{
   display:flex;
   gap:9px;
