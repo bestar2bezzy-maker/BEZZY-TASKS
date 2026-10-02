@@ -181,7 +181,46 @@ header{
 
 .tab:active {
   transform:scale(.95);
-}  
+} 
+
+  /* ============================================================
+   BEZZY TASKS — ONGLET ACTIF
+   ============================================================ */
+
+.tab{
+  position:relative;
+  overflow:hidden;
+}
+
+.tab::after{
+  content:"";
+  position:absolute;
+  left:18%;
+  right:18%;
+  bottom:0;
+  height:2px;
+  border-radius:999px;
+  background:var(--gold);
+  transform:scaleX(0);
+  transition:transform .2s ease;
+}
+
+.tab.active,
+.tab[aria-current="page"]{
+  background:linear-gradient(
+    135deg,
+    rgba(225,189,91,.18),
+    rgba(21,62,42,.95)
+  );
+  border-color:rgba(225,189,91,.55);
+  color:var(--gold);
+  box-shadow:0 6px 18px rgba(0,0,0,.2);
+}
+
+.tab.active::after,
+.tab[aria-current="page"]::after{
+  transform:scaleX(1);
+}
 
 .actions{
   display:flex;
