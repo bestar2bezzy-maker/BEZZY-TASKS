@@ -446,6 +446,77 @@ header{
   transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease
 }
 
+  /* ============================================================
+   BEZZY TASKS — ANIMATION DES MISSIONS
+   ============================================================ */
+
+.offer{
+  animation:bezzyOfferIn .4s ease both;
+  will-change:transform,opacity;
+}
+
+.offer:nth-child(1){
+  animation-delay:.05s;
+}
+
+.offer:nth-child(2){
+  animation-delay:.10s;
+}
+
+.offer:nth-child(3){
+  animation-delay:.15s;
+}
+
+.offer:nth-child(4){
+  animation-delay:.20s;
+}
+
+.offer:nth-child(5){
+  animation-delay:.25s;
+}
+
+.offer:nth-child(6){
+  animation-delay:.30s;
+}
+
+@keyframes bezzyOfferIn{
+  from{
+    opacity:0;
+    transform:translateY(12px) scale(.98);
+  }
+
+  to{
+    opacity:1;
+    transform:translateY(0) scale(1);
+  }
+}
+
+.offer .primary{
+  transition:
+    transform .18s ease,
+    box-shadow .18s ease,
+    filter .18s ease;
+}
+
+.offer .primary:hover{
+  transform:translateY(-2px);
+}
+
+.offer .primary:active{
+  transform:scale(.95);
+  filter:brightness(.92);
+}
+
+@media (prefers-reduced-motion:reduce){
+  .offer{
+    animation:none;
+  }
+
+  .offer .primary{
+    transition:none;
+  }
+  }
+
 .offer:hover{
   transform:translateY(-3px);
   border-color:rgba(225,189,91,.45);
