@@ -130,6 +130,65 @@ header{
   margin:7px 0
 }
 
+  /* ============================================================
+   BEZZY TASKS — ANIMATION DU SOLDE
+   ============================================================ */
+
+.balanceCard{
+  animation:bezzyBalanceIn .55s ease both;
+}
+
+.balance{
+  animation:bezzyBalanceValue .65s ease .12s both;
+  transform-origin:center left;
+}
+
+.balanceCard .balanceLabel{
+  animation:bezzyBalanceLabel .45s ease .2s both;
+}
+
+@keyframes bezzyBalanceIn{
+  from{
+    opacity:0;
+    transform:translateY(10px);
+  }
+
+  to{
+    opacity:1;
+    transform:translateY(0);
+  }
+}
+
+@keyframes bezzyBalanceValue{
+  from{
+    opacity:0;
+    transform:translateY(8px) scale(.96);
+  }
+
+  to{
+    opacity:1;
+    transform:translateY(0) scale(1);
+  }
+}
+
+@keyframes bezzyBalanceLabel{
+  from{
+    opacity:0;
+  }
+
+  to{
+    opacity:1;
+  }
+}
+
+@media (prefers-reduced-motion:reduce){
+  .balanceCard,
+  .balance,
+  .balanceCard .balanceLabel{
+    animation:none;
+  }
+}
+
 .balanceLabel{
   font-size:13px;
   color:var(--muted)
