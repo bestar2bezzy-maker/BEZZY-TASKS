@@ -21,6 +21,11 @@ router.get('/', (req, res, next) => {
         title,
         description,
         reward_minor,
+        partner_payout_minor,
+        reward_rate_bps,
+        max_user_reward_minor,
+        min_platform_margin_minor,
+        reward_model,
         currency,
         status,
         created_at
@@ -29,7 +34,25 @@ router.get('/', (req, res, next) => {
       ORDER BY created_at DESC
     `).all();
 
-    res.json({ tasks });
+    const tasksWithRewards = tasks.map(task => {
+
+      const reward = calculateTaskReward(task);
+
+      return {
+        id: task.id,
+        title: task.title,
+        description: task.description,
+        reward: reward.user_reward_minor,
+        currency: reward.currency,
+        status: task.status,
+        created_at: task.created_at
+      };
+    });
+
+    res.json({
+      tasks: tasksWithRewards
+    });
+
   } catch (error) {
     next(error);
   }
@@ -287,7 +310,7 @@ const completion = db.prepare(`
           completion_id
         );
 
-if (normalizedDecision === 'APPROVED') {
+        if (normalizedDecision === 'APPROVED') {
 
           const reward = calculateTaskReward(
             completion
@@ -339,37 +362,7 @@ if (normalizedDecision === 'APPROVED') {
               idempotencyKey
             );
           }
-}
-        
-          const existingLedger = db.prepare(`
-            SELECT id
-            FROM ledger_entries
-            WHERE idempotency_key = ?
-          `).get(idempotencyKey);
-
-          if (!existingLedger) {
-            db.prepare(`
-              INSERT INTO ledger_entries (
-                user_id,
-                entry_type,
-                direction,
-                amount_minor,
-                currency,
-                reference_type,
-                reference_id,
-                idempotency_key
-              )
-              VALUES (?, 'TASK_REWARD', 'CREDIT', ?, ?, 'TASK', ?, ?)
-            `).run(
-              completion.user_id,
-              completion.reward_minor,
-              completion.currency,
-              completion.task_id,
-              idempotencyKey
-            );
-          }
         }
-      });
 
       transaction();
 
