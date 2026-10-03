@@ -3,6 +3,10 @@ const crypto = require('crypto');
 const { getDb } = require('../config/database');
 const { requireAuth, requireRole } = require('../middleware/auth');
 
+const {
+  calculateTaskReward
+} = require('../services/rewardEngine');
+
 const router = express.Router();
 
 router.use(requireAuth);
@@ -245,10 +249,15 @@ router.post(
         });
       }
 
-      const completion = db.prepare(`
+const completion = db.prepare(`
         SELECT
           tc.*,
           t.reward_minor,
+          t.partner_payout_minor,
+          t.reward_rate_bps,
+          t.max_user_reward_minor,
+          t.min_platform_margin_minor,
+          t.reward_model,
           t.currency
         FROM task_completions tc
         JOIN tasks t ON t.id = tc.task_id
@@ -278,9 +287,60 @@ router.post(
           completion_id
         );
 
-        if (normalizedDecision === 'APPROVED') {
-          const idempotencyKey = `task-reward:${completion_id}`;
+if (normalizedDecision === 'APPROVED') {
 
+          const reward = calculateTaskReward(
+            completion
+          );
+
+          const idempotencyKey =
+            `task-reward:${completion_id}`;
+
+          const existingLedger = db.prepare(`
+            SELECT id
+            FROM ledger_entries
+            WHERE idempotency_key = ?
+          `).get(idempotencyKey);
+
+          if (!existingLedger) {
+
+            if (reward.user_reward_minor <= 0) {
+              throw new Error(
+                'TASK_REWARD_INVALID'
+              );
+            }
+
+            db.prepare(`
+              INSERT INTO ledger_entries (
+                user_id,
+                entry_type,
+                direction,
+                amount_minor,
+                currency,
+                reference_type,
+                reference_id,
+                idempotency_key
+              )
+              VALUES (
+                ?,
+                'TASK_REWARD',
+                'CREDIT',
+                ?,
+                ?,
+                'TASK',
+                ?,
+                ?
+              )
+            `).run(
+              completion.user_id,
+              reward.user_reward_minor,
+              reward.currency,
+              completion.task_id,
+              idempotencyKey
+            );
+          }
+}
+        
           const existingLedger = db.prepare(`
             SELECT id
             FROM ledger_entries
