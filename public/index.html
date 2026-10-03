@@ -2540,138 +2540,52 @@ async function load() {
    OFFRES — NOUVEAU MOTEUR /api/tasks
    ============================================================ */
 
-async function loadOffers() {
+async function startOffer(id) {
 
   try {
 
+    if (!id) {
+      toast("Mission invalide.");
+      return;
+    }
+
     const data =
-      await api("/api/tasks");
+      await api(
+        "/api/tasks/" +
+        encodeURIComponent(id) +
+        "/start",
+        {
+          method: "POST",
+          body: JSON.stringify({})
+        }
+      );
 
-    const rows =
-      Array.isArray(data)
-        ? data
-        : Array.isArray(data.tasks)
-          ? data.tasks
-          : [];
+    if (data?.completion) {
 
-    $("offers").innerHTML =
-      rows.length
+      toast(
+        data.completion.status === "STARTED"
+          ? "Mission démarrée. Vous pouvez maintenant l'effectuer."
+          : "Mission déjà enregistrée."
+      );
 
-        ? rows.map(task => {
+    } else {
 
-            const reward =
-              Number(task.reward_minor || 0);
+      toast("Mission démarrée.");
 
-            const currency =
-              task.currency || "XAF";
-
-            const currencyLabel =
-              currency === "XAF"
-                ? "FCFA"
-                : currency;
-
-            return `
-
-  <article class="offer">
-
-    <div class="offerTop">
-
-      <div class="offerType">
-
-        <span class="offerIcon">
-          📋
-        </span>
-
-        <span>
-          MISSION
-        </span>
-
-      </div>
-
-      <div class="reward">
-
-        +${reward.toLocaleString("fr-FR")}
-        ${currencyLabel}
-
-      </div>
-
-    </div>
-
-
-    <h3>
-      ${esc(task.title || "Mission Bezzy")}
-    </h3>
-
-
-    <p class="muted">
-
-      ${esc(
-        task.description ||
-        "Effectuez cette mission puis soumettez votre preuve pour validation."
-      )}
-
-    </p>
-
-
-    <div class="offerMeta">
-
-      <span>
-        ⚡ Mission rémunérée
-      </span>
-
-      <span>
-        ✓ Validation Bezzy
-      </span>
-
-    </div>
-
-
-    <div class="actions">
-
-      <button
-        class="primary"
-        onclick="startOffer(${Number(task.id)})">
-
-        Commencer la mission ↗
-
-      </button>
-
-    </div>
-
-
-    <p class="small muted">
-
-      Aucun gain sur simple clic.
-      La récompense est créditée après validation réelle.
-
-    </p>
-
-  </article>
-
-`;
-
-          }).join("")
-
-        : `
-          <div class="card">
-
-            Aucune mission active pour le moment.
-
-          </div>
-        `;
+    }
 
   } catch (error) {
 
     toast(
       error?.message ||
-      "Impossible de charger les missions."
+      "Impossible de démarrer cette mission."
     );
 
   }
 
-    }
+  }
 
-  
+
 /* ============================================================
    DÉMARRER UNE OFFRE
    ============================================================ */
