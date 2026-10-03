@@ -363,6 +363,7 @@ const completion = db.prepare(`
             );
           }
         }
+      });
 
       transaction();
 
