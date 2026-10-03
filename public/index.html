@@ -2537,61 +2537,91 @@ async function load() {
 
   
 /* ============================================================
-   OFFRES
+   OFFRES — NOUVEAU MOTEUR /api/tasks
    ============================================================ */
 
 async function loadOffers() {
 
   try {
 
+    const data =
+      await api("/api/tasks");
+
     const rows =
-      await api("/api/offers");
+      Array.isArray(data)
+        ? data
+        : Array.isArray(data.tasks)
+          ? data.tasks
+          : [];
 
     $("offers").innerHTML =
       rows.length
 
-        ? rows.map(offer => `
+        ? rows.map(task => {
+
+            const reward =
+              Number(task.reward_minor || 0);
+
+            const currency =
+              task.currency || "XAF";
+
+            const currencyLabel =
+              currency === "XAF"
+                ? "FCFA"
+                : currency;
+
+            return `
 
   <article class="offer">
 
     <div class="offerTop">
 
       <div class="offerType">
+
         <span class="offerIcon">
-          ${offer.type === "game" ? "🎮" : "📱"}
+          📋
         </span>
 
         <span>
-          ${offer.type === "game"
-            ? "JEU"
-            : "APPLICATION"}
+          MISSION
         </span>
+
       </div>
 
       <div class="reward">
-        +${Number(offer.reward)
-          .toLocaleString("fr-FR")}
-        FCFA
+
+        +${reward.toLocaleString("fr-FR")}
+        ${currencyLabel}
+
       </div>
 
     </div>
 
 
     <h3>
-      ${esc(offer.title)}
+      ${esc(task.title || "Mission Bezzy")}
     </h3>
 
 
     <p class="muted">
-      ${esc(offer.description)}
+
+      ${esc(
+        task.description ||
+        "Effectuez cette mission puis soumettez votre preuve pour validation."
+      )}
+
     </p>
 
 
     <div class="offerMeta">
 
-      <span>⚡ Mission rémunérée</span>
+      <span>
+        ⚡ Mission rémunérée
+      </span>
 
-      <span>✓ Validation partenaire</span>
+      <span>
+        ✓ Validation Bezzy
+      </span>
 
     </div>
 
@@ -2600,46 +2630,48 @@ async function loadOffers() {
 
       <button
         class="primary"
-        onclick="startOffer(${offer.id})">
-        Commencer la mission ↗
-      </button>
+        onclick="startOffer(${Number(task.id)})">
 
-      ${
-        offer.completion_status
-          ? `
-            <span class="secondary">
-              ${esc(offer.completion_status)}
-            </span>
-          `
-          : ""
-      }
+        Commencer la mission ↗
+
+      </button>
 
     </div>
 
 
     <p class="small muted">
+
       Aucun gain sur simple clic.
       La récompense est créditée après validation réelle.
+
     </p>
 
   </article>
 
-`).join("")
+`;
+
+          }).join("")
 
         : `
           <div class="card">
-            Aucune campagne active pour le moment.
+
+            Aucune mission active pour le moment.
+
           </div>
         `;
 
   } catch (error) {
 
-    toast(error.message);
+    toast(
+      error?.message ||
+      "Impossible de charger les missions."
+    );
 
   }
-}
 
+    }
 
+  
 /* ============================================================
    DÉMARRER UNE OFFRE
    ============================================================ */
