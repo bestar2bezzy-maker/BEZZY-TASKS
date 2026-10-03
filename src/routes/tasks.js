@@ -62,6 +62,33 @@ router.get('/', (req, res, next) => {
   }
 });
 
+router.get('/history/me', (req, res, next) => {
+  try {
+    const db = getDb();
+
+    const history = db.prepare(`
+      SELECT
+        tc.id,
+        tc.task_id,
+        tc.status,
+        tc.evidence_json,
+        tc.submitted_at,
+        tc.reviewed_at,
+        t.title,
+        t.reward_minor,
+        t.currency
+      FROM task_completions tc
+      JOIN tasks t ON t.id = tc.task_id
+      WHERE tc.user_id = ?
+      ORDER BY tc.submitted_at DESC
+    `).all(req.user.sub);
+
+    res.json({ history });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get('/:id', (req, res, next) => {
   try {
     const db = getDb();
@@ -305,33 +332,6 @@ router.post('/:id/submit', (req, res, next) => {
       }
     });
 
-  } catch (error) {
-    next(error);
-  }
-});
-
-router.get('/history/me', (req, res, next) => {
-  try {
-    const db = getDb();
-
-    const history = db.prepare(`
-      SELECT
-        tc.id,
-        tc.task_id,
-        tc.status,
-        tc.evidence_json,
-        tc.submitted_at,
-        tc.reviewed_at,
-        t.title,
-        t.reward_minor,
-        t.currency
-      FROM task_completions tc
-      JOIN tasks t ON t.id = tc.task_id
-      WHERE tc.user_id = ?
-      ORDER BY tc.submitted_at DESC
-    `).all(req.user.sub);
-
-    res.json({ history });
   } catch (error) {
     next(error);
   }
