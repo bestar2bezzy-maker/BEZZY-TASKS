@@ -2585,39 +2585,143 @@ async function startOffer(id) {
 
   }
 
-
 /* ============================================================
-   DÉMARRER UNE OFFRE
+   CHARGEMENT DES MISSIONS — /api/tasks
    ============================================================ */
 
-async function startOffer(id) {
+async function loadOffers() {
 
   try {
 
-    const data =
-      await api(
-        "/api/offers/" + id + "/start",
-        {
-          method: "POST"
-        }
-      );
+    const response =
+      await api("/api/tasks");
 
-    window.open(
-      data.campaign_url,
-      "_blank",
-      "noopener"
-    );
+    const rows =
+      Array.isArray(response)
+        ? response
+        : Array.isArray(response.tasks)
+          ? response.tasks
+          : [];
 
-    toast(
-      "Campagne ouverte. Attendez sa validation réelle pour recevoir le gain."
-    );
+    $("offers").innerHTML =
+      rows.length
+
+        ? rows.map(task => {
+
+            const reward =
+              Number(task.reward || 0);
+
+            const currency =
+              task.currency || "XAF";
+
+            const title =
+              task.title || "Mission Bezzy";
+
+            const description =
+              task.description ||
+              "Complétez cette mission pour recevoir votre récompense.";
+
+            return `
+
+              <article class="offer">
+
+                <div class="offerTop">
+
+                  <div class="offerType">
+
+                    <span class="offerIcon">
+                      📱
+                    </span>
+
+                    <span>
+                      MISSION
+                    </span>
+
+                  </div>
+
+                  <div class="reward">
+                    +${reward.toLocaleString("fr-FR")}
+                    ${esc(currency)}
+                  </div>
+
+                </div>
+
+
+                <h3>
+                  ${esc(title)}
+                </h3>
+
+
+                <p class="muted">
+                  ${esc(description)}
+                </p>
+
+
+                <div class="offerMeta">
+
+                  <span>
+                    ⚡ Mission rémunérée
+                  </span>
+
+                  <span>
+                    ✓ Validation automatique
+                  </span>
+
+                </div>
+
+
+                <div class="actions">
+
+                  <button
+                    class="primary"
+                    onclick="startOffer(${Number(task.id)})">
+
+                    Commencer la mission ↗
+
+                  </button>
+
+                </div>
+
+
+                <p class="small muted">
+
+                  La récompense affichée est calculée
+                  automatiquement par Bezzy Tasks.
+
+                </p>
+
+              </article>
+
+            `;
+
+          }).join("")
+
+        : `
+
+          <div class="card">
+
+            Aucune mission disponible pour le moment.
+
+          </div>
+
+        `;
 
   } catch (error) {
 
-    toast(error.message);
+    console.error(
+      "BEZZY LOAD TASKS ERROR:",
+      error
+    );
+
+    toast(
+      error?.message ||
+      "Impossible de charger les missions."
+    );
 
   }
+
   }
+  
   /* ============================================================
    BEZZY TASKS — PARTIE 2D
    ONGLETS + HISTORIQUE + DÉCONNEXION
