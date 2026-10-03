@@ -7,6 +7,10 @@ const {
   calculateTaskReward
 } = require('../services/rewardEngine');
 
+const {
+  verifyTaskSubmission
+} = require('../services/taskVerification');
+
 const router = express.Router();
 
 router.use(requireAuth);
@@ -178,11 +182,27 @@ router.post('/:id/submit', (req, res, next) => {
     const { evidence = null } = req.body || {};
 
     const completion = db.prepare(`
-      SELECT *
-      FROM task_completions
-      WHERE user_id = ? AND task_id = ?
+      SELECT
+        tc.*,
+        t.id AS task_id,
+        t.title,
+        t.reward_minor,
+        t.partner_payout_minor,
+        t.reward_rate_bps,
+        t.max_user_reward_minor,
+        t.min_platform_margin_minor,
+        t.reward_model,
+        t.currency,
+        t.status AS task_status
+      FROM task_completions tc
+      JOIN tasks t ON t.id = tc.task_id
+      WHERE tc.user_id = ?
+        AND tc.task_id = ?
       LIMIT 1
-    `).get(req.user.sub, req.params.id);
+    `).get(
+      req.user.sub,
+      req.params.id
+    );
 
     if (!completion) {
       return res.status(404).json({
@@ -203,16 +223,72 @@ router.post('/:id/submit', (req, res, next) => {
         ? evidence.slice(0, 20000)
         : JSON.stringify(evidence).slice(0, 20000);
 
-    db.prepare(`
-      UPDATE task_completions
-      SET status = 'PENDING',
-          evidence_json = ?,
-          submitted_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).run(
-      evidenceJson,
-      completion.id
-    );
+    const verification = verifyTaskSubmission({
+      evidence,
+      task: completion,
+      completion
+    });
+
+    let nextStatus = 'PENDING';
+
+    if (verification.status === 'REVIEW') {
+      nextStatus = 'PENDING';
+    }
+
+    if (verification.status === 'REJECTED') {
+      nextStatus = 'REJECTED';
+    }
+
+    const transaction = db.transaction(() => {
+
+      db.prepare(`
+        UPDATE task_completions
+        SET status = ?,
+            evidence_json = ?,
+            submitted_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(
+        nextStatus,
+        evidenceJson,
+        completion.id
+      );
+
+      /*
+       * Si la preuve contient déjà un événement partenaire,
+       * on conserve sa référence pour la vérification future.
+       */
+      if (
+        verification.partner_event_id &&
+        verification.partner_id
+      ) {
+        db.prepare(`
+          INSERT OR IGNORE INTO task_verification_events (
+            id,
+            completion_id,
+            task_id,
+            user_id,
+            partner_id,
+            external_event_id,
+            event_type,
+            payload_json,
+            verification_status
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          crypto.randomUUID(),
+          completion.id,
+          completion.task_id,
+          completion.user_id,
+          String(verification.partner_id),
+          String(verification.partner_event_id),
+          'SUBMISSION',
+          evidenceJson,
+          verification.status
+        );
+      }
+    });
+
+    transaction();
 
     const updated = db.prepare(`
       SELECT *
@@ -220,7 +296,15 @@ router.post('/:id/submit', (req, res, next) => {
       WHERE id = ?
     `).get(completion.id);
 
-    res.json({ completion: updated });
+    res.json({
+      completion: updated,
+      verification: {
+        status: verification.status,
+        reason: verification.reason,
+        confidence: verification.confidence
+      }
+    });
+
   } catch (error) {
     next(error);
   }
