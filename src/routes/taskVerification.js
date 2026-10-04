@@ -137,25 +137,34 @@ router.post(
           ''
         ).trim();
 
-      const externalTaskId =
-        String(
-          body.task_id ||
-          body.external_task_id ||
-          ''
-        ).trim();
+      const partnerTaskId =
+  String(
+    body.partner_task_id ||
+    body.task_id ||
+    ''
+  ).trim();
 
-      const eventType =
-        String(
-          body.event_type ||
-          'TASK_COMPLETED'
-        ).trim();
+const eventType =
+  String(
+    body.event_type ||
+    'TASK_COMPLETED'
+  ).trim();
 
 
-      if (
-        !partnerId ||
-        !externalEventId ||
-        !externalUserId
-      ) {
+if (
+  !partnerId ||
+  !externalEventId ||
+  !externalUserId ||
+  !partnerTaskId
+) {
+
+  return res.status(400).json({
+    error: 'INVALID_PARTNER_EVENT',
+    message:
+      'partner_id, partner_task_id, external_event_id and user_id are required'
+  });
+
+}
 
         return res.status(400).json({
           error: 'INVALID_PARTNER_EVENT',
