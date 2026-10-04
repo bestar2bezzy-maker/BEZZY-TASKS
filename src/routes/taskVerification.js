@@ -4,6 +4,10 @@ const crypto = require('crypto');
 const { getDb } = require('../config/database');
 
 const {
+  calculateTaskReward
+} = require('../services/rewardEngine');
+
+const {
   verifyPartnerEvent,
   isPartnerEventAlreadyConsumed
 } = require('../services/taskVerification');
@@ -385,93 +389,204 @@ if (!completion) {
 
         });
 
+/*
+ * --------------------------------------------------------
+ * 7. Enregistrer + traiter l'événement
+ * --------------------------------------------------------
+ */
 
-      /*
-       * --------------------------------------------------------
-       * 7. Enregistrer l'événement
-       * --------------------------------------------------------
-       */
+const transaction =
+  db.transaction(() => {
 
-      const verificationEventId =
-        crypto.randomUUID();
+    const verificationEventId =
+      crypto.randomUUID();
+
+    /*
+     * Enregistrer l'événement partenaire.
+     */
+    db.prepare(`
+      INSERT INTO task_verification_events (
+        id,
+        completion_id,
+        task_id,
+        user_id,
+        partner_id,
+        external_event_id,
+        event_type,
+        payload_json,
+        verification_status
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      verificationEventId,
+      completion.id,
+      task.id,
+      completion.user_id,
+      partnerId,
+      externalEventId,
+      eventType,
+      JSON.stringify(body),
+      verification.status
+    );
 
 
-      db.prepare(`
-        INSERT INTO task_verification_events (
-          id,
-          completion_id,
-          task_id,
-          user_id,
-          partner_id,
-          external_event_id,
-          event_type,
-          payload_json,
-          verification_status
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
+    /*
+     * --------------------------------------------------------
+     * 8. Si VERIFIED → crédit automatique
+     * --------------------------------------------------------
+     */
 
+    if (
+      verification.status !== 'VERIFIED'
+    ) {
+      return {
         verificationEventId,
+        credited: false
+      };
+    }
 
-        completion.id,
 
-        task.id,
+    /*
+     * Calcul officiel de la récompense.
+     */
+    const reward =
+      calculateTaskReward(task);
 
-        completion.user_id,
 
-        partnerId,
+    if (
+      !reward ||
+      reward.user_reward_minor <= 0
+    ) {
+      throw new Error(
+        'TASK_REWARD_INVALID'
+      );
+    }
 
-        externalEventId,
 
-        eventType,
+    /*
+     * Idempotence :
+     * une completion ne peut être créditée
+     * qu'une seule fois.
+     */
+    const idempotencyKey =
+      `task-reward:${completion.id}`;
 
-        JSON.stringify(body),
 
-        verification.status
-
+    const existingLedger =
+      db.prepare(`
+        SELECT
+          id
+        FROM ledger_entries
+        WHERE idempotency_key = ?
+        LIMIT 1
+      `).get(
+        idempotencyKey
       );
 
 
-      /*
-       * --------------------------------------------------------
-       * 8. Si VERIFIED
-       * --------------------------------------------------------
-       *
-       * Pour le moment nous NE créditons PAS encore
-       * automatiquement l'utilisateur.
-       *
-       * Nous allons brancher le paiement idempotent
-       * dans l'étape suivante.
-       */
+    if (!existingLedger) {
 
-      if (
-        verification.status === 'VERIFIED'
-      ) {
+      db.prepare(`
+        INSERT INTO ledger_entries (
+          user_id,
+          entry_type,
+          direction,
+          amount_minor,
+          currency,
+          reference_type,
+          reference_id,
+          idempotency_key
+        )
+        VALUES (
+          ?,
+          'TASK_REWARD',
+          'CREDIT',
+          ?,
+          ?,
+          'TASK',
+          ?,
+          ?
+        )
+      `).run(
+        completion.user_id,
+        reward.user_reward_minor,
+        reward.currency,
+        completion.task_id,
+        idempotencyKey
+      );
 
-        return res.status(200).json({
+    }
 
-          status:
-            'VERIFIED',
 
-          verification_event_id:
-            verificationEventId,
+    /*
+     * La completion est officiellement approuvée
+     * uniquement lorsque l'événement est VERIFIED.
+     */
+    db.prepare(`
+      UPDATE task_completions
+      SET status = 'APPROVED',
+          reviewed_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(
+      completion.id
+    );
 
-          completion_id:
-            completion.id,
 
-          task_id:
-            task.id,
+    return {
+      verificationEventId,
+      credited: !existingLedger,
+      reward
+    };
 
-          user_id:
-            completion.user_id,
+  });
 
-          reward_ready:
-            true
 
-        });
+const paymentResult =
+  transaction();
 
-      }
 
+/*
+ * --------------------------------------------------------
+ * 8. Réponse après traitement
+ * --------------------------------------------------------
+ */
+
+if (
+  verification.status === 'VERIFIED'
+) {
+
+  return res.status(200).json({
+
+    status:
+      'VERIFIED',
+
+    verification_event_id:
+      paymentResult.verificationEventId,
+
+    completion_id:
+      completion.id,
+
+    task_id:
+      task.id,
+
+    user_id:
+      completion.user_id,
+
+    reward_ready:
+      true,
+
+    reward_credited:
+      paymentResult.credited,
+
+    reward:
+      paymentResult.reward.user_reward_minor,
+
+    currency:
+      paymentResult.reward.currency
+
+  });
+
+        }
 
       /*
        * --------------------------------------------------------
