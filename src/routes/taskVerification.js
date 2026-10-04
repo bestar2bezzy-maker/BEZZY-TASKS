@@ -338,7 +338,7 @@ if (!completion) {
           partnerId,
 
         user_id:
-          externalUserId,
+  bezzyUserId,
 
         task_id:
   partnerTaskId || task.id,
