@@ -201,24 +201,6 @@ if (
         );
 
 
-      if (existingEvent) {
-
-        return res.status(409).json({
-          error:
-            'PARTNER_EVENT_ALREADY_CONSUMED',
-          message:
-            'This partner event has already been processed',
-          event_id:
-            existingEvent.id,
-          completion_id:
-            existingEvent.completion_id,
-          status:
-            existingEvent.verification_status
-        });
-
-      }
-
-
       /*
        * --------------------------------------------------------
        * 4. Trouver la tâche et l'utilisateur
@@ -232,22 +214,37 @@ if (
 
       let task = null;
 
-      if (externalTaskId) {
+      if (partnerTaskId) {
 
-        task =
-          db.prepare(`
-            SELECT
-              *
-            FROM tasks
-            WHERE id = ?
-               OR partner_task_id = ?
-               OR external_task_id = ?
-            LIMIT 1
-          `).get(
-            externalTaskId,
-            externalTaskId,
-            externalTaskId
-          );
+  task =
+    db.prepare(`
+      SELECT
+        *
+      FROM tasks
+      WHERE id = ?
+        AND partner_id = ?
+      LIMIT 1
+    `).get(
+      partnerTaskId,
+      partnerId
+    );
+
+  if (!task) {
+
+    task =
+      db.prepare(`
+        SELECT
+          *
+        FROM tasks
+        WHERE partner_id = ?
+          AND partner_task_id = ?
+        LIMIT 1
+      `).get(
+        partnerId,
+        partnerTaskId
+      );
+
+  }
 
       }
 
@@ -315,7 +312,7 @@ if (
           externalUserId,
 
         task_id:
-          externalTaskId || task.id,
+  partnerTaskId || task.id,
 
         external_task_id:
           externalTaskId || null,
