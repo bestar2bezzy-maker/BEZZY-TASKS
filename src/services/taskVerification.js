@@ -166,6 +166,27 @@ function verifyPartnerEvent({
     };
   }
 
+  const eventType =
+    normalizeId(event.event_type);
+
+  if (
+    !eventType ||
+    ![
+      'TASK_COMPLETED',
+      'OFFER_COMPLETED',
+      'MISSION_COMPLETED',
+      'SURVEY_COMPLETED',
+      'APP_COMPLETED',
+      'GAME_COMPLETED'
+    ].includes(eventType)
+  ) {
+    return {
+      status: 'REVIEW',
+      reason: 'PARTNER_EVENT_NOT_COMPLETED',
+      confidence: 30
+    };
+  }
+
   /*
    * Correspondance tâche / completion
    */
