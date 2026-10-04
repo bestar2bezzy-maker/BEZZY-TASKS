@@ -520,6 +520,7 @@ db.prepare(`
   })
 );
 
+  }
 
     /*
      * La completion est officiellement approuvée
