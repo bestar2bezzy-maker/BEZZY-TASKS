@@ -207,11 +207,7 @@ function verifyPartnerEvent({
    * Correspondance utilisateur
    */
   const eventUserId =
-    normalizeId(
-      event.user_id ??
-      event.external_user_id ??
-      event.sub_id
-    );
+  normalizeId(event.user_id);
 
   const completionUserId =
     normalizeId(completion?.user_id);
