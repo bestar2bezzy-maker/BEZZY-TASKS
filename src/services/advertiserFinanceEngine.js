@@ -99,6 +99,17 @@ function getOrCreateAdvertiserAccount(
  * ============================================================
  * SOLDE ANNONCEUR
  * ============================================================
+ *
+ * available_minor =
+ *
+ * crédits réels
+ * - débits réels
+ * - réservations actives
+ *
+ * Une réservation ne constitue pas encore
+ * une dépense réelle, mais elle ne doit plus
+ * être disponible pour une autre campagne.
+ * ============================================================
  */
 
 function getAdvertiserBalance(
@@ -139,11 +150,57 @@ function getAdvertiserBalance(
     advertiserAccountId
   );
 
+
+  /*
+   * Somme actuellement réservée
+   * par les campagnes actives.
+   */
+
+  const reservationResult = db.prepare(`
+    SELECT
+
+      COALESCE(
+        SUM(reserved_minor),
+        0
+      ) AS reserved
+
+    FROM campaign_budgets
+
+    WHERE advertiser_account_id = ?
+
+      AND status = 'ACTIVE'
+  `).get(
+    advertiserAccountId
+  );
+
+
   const credits =
     toMinor(result?.credits);
 
+
   const debits =
     toMinor(result?.debits);
+
+
+  const reserved =
+    toMinor(
+      reservationResult?.reserved
+    );
+
+
+  /*
+   * Argent réellement disponible
+   * pour une nouvelle réservation.
+   */
+
+  const available =
+    Math.max(
+      0,
+      credits -
+      debits -
+      reserved
+    );
+
 
   return {
 
@@ -151,13 +208,13 @@ function getAdvertiserBalance(
 
     debits,
 
+    reserved,
+
     available_minor:
-      Math.max(
-        0,
-        credits - debits
-      )
+      available
 
   };
+
 }
 
 
