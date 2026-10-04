@@ -3091,7 +3091,15 @@ router.get('/auth/status', requireAuth, (req, res, next) => {
 
 const tasksRouter = require('./tasks');
 
+const taskVerificationRouter =
+  require('./taskVerification');
+
 router.use('/tasks', tasksRouter);
+
+router.use(
+  '/task-verification',
+  taskVerificationRouter
+);
 
 
 /*
