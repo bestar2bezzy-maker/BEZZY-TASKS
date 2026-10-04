@@ -150,8 +150,7 @@ router.post(
 
 const eventType =
   String(
-    body.event_type ||
-    'TASK_COMPLETED'
+    body.event_type || ''
   ).trim();
 
 
