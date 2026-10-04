@@ -254,27 +254,74 @@ if (
 
 
       /*
-       * --------------------------------------------------------
-       * 5. Trouver la completion utilisateur
-       * --------------------------------------------------------
-       */
+ * --------------------------------------------------------
+ * 5. Résoudre l'utilisateur partenaire
+ * --------------------------------------------------------
+ */
 
-      const completion =
-        db.prepare(`
-          SELECT
-            *
-          FROM task_completions
-          WHERE user_id = ?
-            AND task_id = ?
-          ORDER BY submitted_at DESC
-          LIMIT 1
-        `).get(
-          externalUserId,
-          task.id
-        );
+const partnerUserMapping =
+  db.prepare(`
+    SELECT
+      user_id
+    FROM partner_user_mappings
+    WHERE partner_id = ?
+      AND external_user_id = ?
+    LIMIT 1
+  `).get(
+    partnerId,
+    externalUserId
+  );
 
 
-      if (!completion) {
+if (!partnerUserMapping) {
+
+  return res.status(404).json({
+    error:
+      'PARTNER_USER_NOT_MAPPED',
+
+    message:
+      'No Bezzy user is mapped to this partner user'
+  });
+
+}
+
+
+const bezzyUserId =
+  partnerUserMapping.user_id;
+
+
+/*
+ * --------------------------------------------------------
+ * 5.1 Trouver la completion utilisateur
+ * --------------------------------------------------------
+ */
+
+const completion =
+  db.prepare(`
+    SELECT
+      *
+    FROM task_completions
+    WHERE user_id = ?
+      AND task_id = ?
+    ORDER BY submitted_at DESC
+    LIMIT 1
+  `).get(
+    bezzyUserId,
+    task.id
+  );
+
+
+if (!completion) {
+
+  return res.status(404).json({
+    error:
+      'COMPLETION_NOT_FOUND',
+
+    message:
+      'No matching task completion was found'
+  });
+
+}
 
         return res.status(404).json({
           error:
