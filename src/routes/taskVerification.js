@@ -166,14 +166,6 @@ if (
 
 }
 
-        return res.status(400).json({
-          error: 'INVALID_PARTNER_EVENT',
-          message:
-            'partner_id, external_event_id and user_id are required'
-        });
-
-      }
-
 
       const db =
         getDb();
@@ -315,7 +307,7 @@ if (
   partnerTaskId || task.id,
 
         external_task_id:
-          externalTaskId || null,
+  partnerTaskId || null,
 
         event_type:
           eventType
