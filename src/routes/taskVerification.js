@@ -323,16 +323,6 @@ if (!completion) {
 
 }
 
-        return res.status(404).json({
-          error:
-            'COMPLETION_NOT_FOUND',
-          message:
-            'No matching task completion was found'
-        });
-
-      }
-
-
       /*
        * --------------------------------------------------------
        * 6. Vérification métier
