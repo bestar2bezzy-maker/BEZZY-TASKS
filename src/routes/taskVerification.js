@@ -485,37 +485,40 @@ const transaction =
 
 
     if (!existingLedger) {
-
-      db.prepare(`
-        INSERT INTO ledger_entries (
-          user_id,
-          entry_type,
-          direction,
-          amount_minor,
-          currency,
-          reference_type,
-          reference_id,
-          idempotency_key
-        )
-        VALUES (
-          ?,
-          'TASK_REWARD',
-          'CREDIT',
-          ?,
-          ?,
-          'TASK',
-          ?,
-          ?
-        )
-      `).run(
-        completion.user_id,
-        reward.user_reward_minor,
-        reward.currency,
-        completion.task_id,
-        idempotencyKey
-      );
-
-    }
+db.prepare(`
+  INSERT INTO ledger_entries (
+    id,
+    user_id,
+    entry_type,
+    direction,
+    amount_minor,
+    currency,
+    reference_type,
+    reference_id,
+    idempotency_key,
+    metadata_json
+  )
+  VALUES (
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+  )
+`).run(
+  crypto.randomUUID(),
+  completion.user_id,
+  'TASK_REWARD',
+  'CREDIT',
+  reward.user_reward_minor,
+  reward.currency,
+  'TASK_COMPLETION',
+  completion.id,
+  idempotencyKey,
+  JSON.stringify({
+    task_id: completion.task_id,
+    title: task.title,
+    source: 'PARTNER_WEBHOOK',
+    partner_id: partnerId,
+    external_event_id: externalEventId
+  })
+);
 
 
     /*
@@ -606,7 +609,7 @@ if (
           verification.confidence,
 
         verification_event_id:
-          verificationEventId,
+  paymentResult.verificationEventId,
 
         completion_id:
           completion.id
