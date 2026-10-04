@@ -1,22 +1,16 @@
 /*
  * ============================================================
  * BEZZY TASKS — ADVERTISER FINANCE ENGINE
- * V33.5
+ * V33.5.1
  * ============================================================
  *
- * Gère :
- * - solde disponible annonceur
- * - réservations de budget
- * - libération de budget
- * - dépenses de campagne
- * - protection contre le surpaiement
+ * Gère les fonds annonceurs sans double comptabilisation.
  *
- * IMPORTANT :
- * Les montants sont toujours exprimés en minor units.
- * Exemple :
- * 1 000 FCFA = 1000
- *
- * La source financière est advertiser_transactions.
+ * - le dépôt augmente le solde disponible ;
+ * - la réservation immobilise le budget de campagne ;
+ * - la réservation NE débite PAS le compte ;
+ * - une conversion validée devient une dépense réelle ;
+ * - chaque dépense est idempotente par completion unique.
  * ============================================================
  */
 
@@ -24,10 +18,20 @@ const crypto = require('crypto');
 const { getDb } = require('../config/database');
 
 
+/*
+ * ============================================================
+ * OUTIL MONTANT
+ * ============================================================
+ */
+
 function toMinor(value) {
+
   const amount = Number(value);
 
-  if (!Number.isFinite(amount) || amount < 0) {
+  if (
+    !Number.isFinite(amount) ||
+    amount < 0
+  ) {
     return 0;
   }
 
@@ -37,7 +41,7 @@ function toMinor(value) {
 
 /*
  * ============================================================
- * RÉCUPÉRER / CRÉER LE COMPTE ANNONCEUR
+ * COMPTE ANNONCEUR
  * ============================================================
  */
 
@@ -45,6 +49,7 @@ function getOrCreateAdvertiserAccount(
   ownerUserId,
   currency = 'XAF'
 ) {
+
   const db = getDb();
 
   const normalizedCurrency =
@@ -65,7 +70,8 @@ function getOrCreateAdvertiserAccount(
     return account;
   }
 
-  const id = crypto.randomUUID();
+  const id =
+    crypto.randomUUID();
 
   db.prepare(`
     INSERT INTO advertiser_accounts (
@@ -91,17 +97,19 @@ function getOrCreateAdvertiserAccount(
 
 /*
  * ============================================================
- * CALCUL DU SOLDE ANNONCEUR
+ * SOLDE ANNONCEUR
  * ============================================================
  */
 
 function getAdvertiserBalance(
   advertiserAccountId
 ) {
+
   const db = getDb();
 
   const result = db.prepare(`
     SELECT
+
       COALESCE(
         SUM(
           CASE
@@ -127,7 +135,9 @@ function getAdvertiserBalance(
     FROM advertiser_transactions
 
     WHERE advertiser_account_id = ?
-  `).get(advertiserAccountId);
+  `).get(
+    advertiserAccountId
+  );
 
   const credits =
     toMinor(result?.credits);
@@ -136,20 +146,24 @@ function getAdvertiserBalance(
     toMinor(result?.debits);
 
   return {
+
     credits,
+
     debits,
+
     available_minor:
       Math.max(
         0,
         credits - debits
       )
+
   };
 }
 
 
 /*
  * ============================================================
- * VÉRIFIER SI LES FONDS SONT SUFFISANTS
+ * VÉRIFICATION DES FONDS
  * ============================================================
  */
 
@@ -157,8 +171,17 @@ function assertSufficientFunds(
   advertiserAccountId,
   amountMinor
 ) {
+
   const amount =
     toMinor(amountMinor);
+
+  if (amount <= 0) {
+
+    throw new Error(
+      'INVALID_FINANCIAL_AMOUNT'
+    );
+
+  }
 
   const balance =
     getAdvertiserBalance(
@@ -166,16 +189,9 @@ function assertSufficientFunds(
     );
 
   if (
-    amount <= 0
-  ) {
-    throw new Error(
-      'INVALID_FINANCIAL_AMOUNT'
-    );
-  }
-
-  if (
     balance.available_minor < amount
   ) {
+
     const error =
       new Error(
         'INSUFFICIENT_ADVERTISER_FUNDS'
@@ -199,40 +215,63 @@ function assertSufficientFunds(
 
 /*
  * ============================================================
- * ENREGISTRER UNE TRANSACTION
+ * TRANSACTION ANNONCEUR
  * ============================================================
  */
 
 function createAdvertiserTransaction({
+
   advertiserAccountId,
+
   transactionType,
+
   direction,
+
   amountMinor,
+
   currency,
+
   referenceType,
+
   referenceId,
+
   idempotencyKey,
+
   metadata = null
+
 }) {
+
   const db = getDb();
 
   const amount =
     toMinor(amountMinor);
 
   if (
+
     !advertiserAccountId ||
+
     !transactionType ||
+
     !direction ||
+
     amount <= 0 ||
+
     !currency ||
+
     !referenceType ||
+
     !referenceId ||
+
     !idempotencyKey
+
   ) {
+
     throw new Error(
       'INVALID_ADVERTISER_TRANSACTION'
     );
+
   }
+
 
   const existing =
     db.prepare(`
@@ -240,49 +279,82 @@ function createAdvertiserTransaction({
       FROM advertiser_transactions
       WHERE idempotency_key = ?
       LIMIT 1
-    `).get(idempotencyKey);
+    `).get(
+      idempotencyKey
+    );
+
 
   if (existing) {
+
     return existing;
+
   }
+
 
   const id =
     crypto.randomUUID();
 
+
   db.prepare(`
     INSERT INTO advertiser_transactions (
+
       id,
+
       advertiser_account_id,
+
       transaction_type,
+
       direction,
+
       amount_minor,
+
       currency,
+
       reference_type,
+
       reference_id,
+
       idempotency_key,
+
       metadata_json
+
     )
+
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+
   `).run(
+
     id,
+
     advertiserAccountId,
+
     transactionType,
+
     direction,
+
     amount,
+
     String(currency).toUpperCase(),
+
     referenceType,
+
     String(referenceId),
+
     idempotencyKey,
+
     metadata
       ? JSON.stringify(metadata)
       : null
+
   );
+
 
   return db.prepare(`
     SELECT *
     FROM advertiser_transactions
     WHERE id = ?
   `).get(id);
+
 }
 
 
@@ -290,118 +362,164 @@ function createAdvertiserTransaction({
  * ============================================================
  * RÉSERVER LE BUDGET D'UNE CAMPAGNE
  * ============================================================
+ *
+ * IMPORTANT :
+ *
+ * Une réservation ne constitue PAS une dépense.
+ *
+ * Elle immobilise simplement une partie du budget.
+ *
+ * Le débit réel intervient uniquement lors
+ * de la conversion validée.
+ * ============================================================
  */
 
 function reserveCampaignBudget({
+
   taskId,
+
   advertiserAccountId,
+
   amountMinor,
+
   currency
+
 }) {
+
   const db = getDb();
 
   const amount =
     toMinor(amountMinor);
 
+
   if (amount <= 0) {
+
     throw new Error(
       'INVALID_CAMPAIGN_BUDGET'
     );
+
   }
 
-  const transaction =
-    db.transaction(() => {
 
-      const budget =
-        db.prepare(`
-          SELECT *
-          FROM campaign_budgets
-          WHERE task_id = ?
-          LIMIT 1
-        `).get(taskId);
+  return db.transaction(() => {
 
-      if (!budget) {
-        throw new Error(
-          'CAMPAIGN_BUDGET_NOT_FOUND'
-        );
-      }
-
-      if (
-        budget.advertiser_account_id !==
-        advertiserAccountId
-      ) {
-        throw new Error(
-          'CAMPAIGN_ACCOUNT_MISMATCH'
-        );
-      }
-
-      if (
-        budget.status !== 'ACTIVE'
-      ) {
-        throw new Error(
-          'CAMPAIGN_NOT_ACTIVE'
-        );
-      }
-
-      const remaining =
-        Math.max(
-          0,
-          Number(budget.budget_minor) -
-          Number(budget.reserved_minor) -
-          Number(budget.spent_minor)
-        );
-
-      if (remaining < amount) {
-        throw new Error(
-          'CAMPAIGN_BUDGET_EXCEEDED'
-        );
-      }
-
-      assertSufficientFunds(
-        advertiserAccountId,
-        amount
-      );
-
-      createAdvertiserTransaction({
-        advertiserAccountId,
-        transactionType:
-          'CAMPAIGN_RESERVE',
-        direction:
-          'DEBIT',
-        amountMinor:
-          amount,
-        currency,
-        referenceType:
-          'CAMPAIGN',
-        referenceId:
-          taskId,
-        idempotencyKey:
-          `campaign-reserve:${taskId}:${amount}`,
-        metadata: {
-          task_id: taskId
-        }
-      });
-
+    const budget =
       db.prepare(`
-        UPDATE campaign_budgets
-        SET reserved_minor =
-              reserved_minor + ?,
-            updated_at =
-              CURRENT_TIMESTAMP
-        WHERE task_id = ?
-      `).run(
-        amount,
-        taskId
-      );
-
-      return db.prepare(`
         SELECT *
         FROM campaign_budgets
         WHERE task_id = ?
+        LIMIT 1
       `).get(taskId);
-    });
 
-  return transaction();
+
+    if (!budget) {
+
+      throw new Error(
+        'CAMPAIGN_BUDGET_NOT_FOUND'
+      );
+
+    }
+
+
+    if (
+      budget.advertiser_account_id !==
+      advertiserAccountId
+    ) {
+
+      throw new Error(
+        'CAMPAIGN_ACCOUNT_MISMATCH'
+      );
+
+    }
+
+
+    if (
+      budget.status !== 'ACTIVE'
+    ) {
+
+      throw new Error(
+        'CAMPAIGN_NOT_ACTIVE'
+      );
+
+    }
+
+
+    const remaining = Math.max(
+
+      0,
+
+      Number(
+        budget.budget_minor
+      )
+
+      -
+
+      Number(
+        budget.reserved_minor
+      )
+
+      -
+
+      Number(
+        budget.spent_minor
+      )
+
+    );
+
+
+    if (
+      remaining < amount
+    ) {
+
+      throw new Error(
+        'CAMPAIGN_BUDGET_EXCEEDED'
+      );
+
+    }
+
+
+    assertSufficientFunds(
+      advertiserAccountId,
+      amount
+    );
+
+
+    /*
+     * IMPORTANT :
+     *
+     * PAS DE DÉBIT ICI.
+     *
+     * La réservation est représentée
+     * uniquement par reserved_minor.
+     */
+
+    db.prepare(`
+      UPDATE campaign_budgets
+
+      SET reserved_minor =
+            reserved_minor + ?,
+
+          updated_at =
+            CURRENT_TIMESTAMP
+
+      WHERE task_id = ?
+    `).run(
+
+      amount,
+
+      taskId
+
+    );
+
+
+    return db.prepare(`
+      SELECT *
+      FROM campaign_budgets
+      WHERE task_id = ?
+    `).get(taskId);
+
+  })();
+
 }
 
 
@@ -412,206 +530,358 @@ function reserveCampaignBudget({
  */
 
 function releaseCampaignBudget({
+
   taskId,
+
   amountMinor,
+
   currency
+
 }) {
+
   const db = getDb();
 
   const amount =
     toMinor(amountMinor);
 
-  const transaction =
-    db.transaction(() => {
 
-      const budget =
-        db.prepare(`
-          SELECT *
-          FROM campaign_budgets
-          WHERE task_id = ?
-          LIMIT 1
-        `).get(taskId);
+  return db.transaction(() => {
 
-      if (!budget) {
-        throw new Error(
-          'CAMPAIGN_BUDGET_NOT_FOUND'
-        );
-      }
-
-      const releasable =
-        Math.min(
-          amount,
-          Number(budget.reserved_minor)
-        );
-
-      if (releasable <= 0) {
-        return budget;
-      }
-
-      createAdvertiserTransaction({
-        advertiserAccountId:
-          budget.advertiser_account_id,
-        transactionType:
-          'CAMPAIGN_RELEASE',
-        direction:
-          'CREDIT',
-        amountMinor:
-          releasable,
-        currency,
-        referenceType:
-          'CAMPAIGN',
-        referenceId:
-          taskId,
-        idempotencyKey:
-          `campaign-release:${taskId}:${releasable}`,
-        metadata: {
-          task_id: taskId
-        }
-      });
-
+    const budget =
       db.prepare(`
-        UPDATE campaign_budgets
-        SET reserved_minor =
-              reserved_minor - ?,
-            updated_at =
-              CURRENT_TIMESTAMP
-        WHERE task_id = ?
-      `).run(
-        releasable,
-        taskId
-      );
-
-      return db.prepare(`
         SELECT *
         FROM campaign_budgets
         WHERE task_id = ?
+        LIMIT 1
       `).get(taskId);
-    });
 
-  return transaction();
+
+    if (!budget) {
+
+      throw new Error(
+        'CAMPAIGN_BUDGET_NOT_FOUND'
+      );
+
+    }
+
+
+    const releasable =
+      Math.min(
+        amount,
+        Number(
+          budget.reserved_minor
+        )
+      );
+
+
+    if (
+      releasable <= 0
+    ) {
+
+      return budget;
+
+    }
+
+
+    /*
+     * La libération ne crée pas
+     * de nouveau crédit financier.
+     *
+     * Elle remet simplement la somme
+     * dans la partie non réservée.
+     */
+
+    db.prepare(`
+      UPDATE campaign_budgets
+
+      SET reserved_minor =
+            reserved_minor - ?,
+
+          updated_at =
+            CURRENT_TIMESTAMP
+
+      WHERE task_id = ?
+    `).run(
+
+      releasable,
+
+      taskId
+
+    );
+
+
+    return db.prepare(`
+      SELECT *
+      FROM campaign_budgets
+      WHERE task_id = ?
+    `).get(taskId);
+
+  })();
+
 }
 
 
 /*
  * ============================================================
- * DÉPENSER LE BUDGET D'UNE CAMPAGNE
+ * DÉPENSE RÉELLE DE CAMPAGNE
+ * ============================================================
+ *
+ * Appelée uniquement lorsqu'une conversion
+ * est réellement validée.
+ *
+ * referenceId = ID UNIQUE DE LA COMPLETION.
+ *
+ * Cela empêche une même conversion
+ * d'être payée deux fois.
  * ============================================================
  */
 
 function spendCampaignBudget({
+
   taskId,
+
   amountMinor,
+
   currency,
+
   referenceId
+
 }) {
+
   const db = getDb();
 
   const amount =
     toMinor(amountMinor);
 
+
   if (amount <= 0) {
+
     throw new Error(
       'INVALID_CAMPAIGN_SPEND'
     );
+
   }
 
-  const transaction =
-    db.transaction(() => {
 
-      const budget =
-        db.prepare(`
-          SELECT *
-          FROM campaign_budgets
-          WHERE task_id = ?
-          LIMIT 1
-        `).get(taskId);
+  if (!referenceId) {
 
-      if (!budget) {
-        throw new Error(
-          'CAMPAIGN_BUDGET_NOT_FOUND'
-        );
-      }
+    throw new Error(
+      'MISSING_COMPLETION_REFERENCE'
+    );
 
-      if (
-        budget.status !== 'ACTIVE'
-      ) {
-        throw new Error(
-          'CAMPAIGN_NOT_ACTIVE'
-        );
-      }
+  }
 
-      if (
-        Number(budget.reserved_minor) <
-        amount
-      ) {
-        throw new Error(
-          'CAMPAIGN_RESERVED_FUNDS_EXCEEDED'
-        );
-      }
 
-      const remaining =
-        Number(budget.budget_minor) -
-        Number(budget.spent_minor);
+  return db.transaction(() => {
 
-      if (remaining < amount) {
-        throw new Error(
-          'CAMPAIGN_BUDGET_EXCEEDED'
-        );
-      }
-
-      createAdvertiserTransaction({
-        advertiserAccountId:
-          budget.advertiser_account_id,
-        transactionType:
-          'CAMPAIGN_SPEND',
-        direction:
-          'DEBIT',
-        amountMinor:
-          amount,
-        currency,
-        referenceType:
-          'TASK_COMPLETION',
-        referenceId:
-          referenceId || taskId,
-        idempotencyKey:
-          `campaign-spend:${taskId}:${referenceId || amount}`,
-        metadata: {
-          task_id: taskId,
-          completion_id:
-            referenceId || null
-        }
-      });
-
+    const budget =
       db.prepare(`
-        UPDATE campaign_budgets
-        SET reserved_minor =
-              reserved_minor - ?,
-            spent_minor =
-              spent_minor + ?,
-            status =
-              CASE
-                WHEN spent_minor + ? >= budget_minor
-                  THEN 'EXHAUSTED'
-                ELSE status
-              END,
-            updated_at =
-              CURRENT_TIMESTAMP
-        WHERE task_id = ?
-      `).run(
-        amount,
-        amount,
-        amount,
-        taskId
-      );
-
-      return db.prepare(`
         SELECT *
         FROM campaign_budgets
         WHERE task_id = ?
+        LIMIT 1
       `).get(taskId);
+
+
+    if (!budget) {
+
+      throw new Error(
+        'CAMPAIGN_BUDGET_NOT_FOUND'
+      );
+
+    }
+
+
+    if (
+      budget.status !== 'ACTIVE'
+    ) {
+
+      throw new Error(
+        'CAMPAIGN_NOT_ACTIVE'
+      );
+
+    }
+
+
+    /*
+     * ========================================================
+     * IDEMPOTENCE
+     * ========================================================
+     */
+
+    const idempotencyKey =
+      `campaign-spend:${taskId}:completion:${referenceId}`;
+
+
+    const existing =
+      db.prepare(`
+        SELECT *
+        FROM advertiser_transactions
+
+        WHERE idempotency_key = ?
+
+        LIMIT 1
+      `).get(
+        idempotencyKey
+      );
+
+
+    if (existing) {
+
+      return budget;
+
+    }
+
+
+    /*
+     * ========================================================
+     * CONTRÔLE DE LA RÉSERVATION
+     * ========================================================
+     */
+
+    if (
+      Number(
+        budget.reserved_minor
+      ) < amount
+    ) {
+
+      throw new Error(
+        'CAMPAIGN_RESERVED_FUNDS_EXCEEDED'
+      );
+
+    }
+
+
+    /*
+     * ========================================================
+     * CONTRÔLE DU BUDGET GLOBAL
+     * ========================================================
+     */
+
+    const remaining =
+      Number(
+        budget.budget_minor
+      )
+
+      -
+
+      Number(
+        budget.spent_minor
+      );
+
+
+    if (
+      remaining < amount
+    ) {
+
+      throw new Error(
+        'CAMPAIGN_BUDGET_EXCEEDED'
+      );
+
+    }
+
+
+    /*
+     * ========================================================
+     * DÉBIT RÉEL
+     * ========================================================
+     */
+
+    createAdvertiserTransaction({
+
+      advertiserAccountId:
+        budget.advertiser_account_id,
+
+      transactionType:
+        'CAMPAIGN_SPEND',
+
+      direction:
+        'DEBIT',
+
+      amountMinor:
+        amount,
+
+      currency,
+
+      referenceType:
+        'TASK_COMPLETION',
+
+      referenceId,
+
+      idempotencyKey,
+
+      metadata: {
+
+        task_id:
+          taskId,
+
+        completion_id:
+          referenceId
+
+      }
+
     });
 
-  return transaction();
+
+    /*
+     * ========================================================
+     * MISE À JOUR DU BUDGET
+     * ========================================================
+     */
+
+    db.prepare(`
+      UPDATE campaign_budgets
+
+      SET
+
+        reserved_minor =
+          reserved_minor - ?,
+
+        spent_minor =
+          spent_minor + ?,
+
+        status =
+
+          CASE
+
+            WHEN
+              spent_minor + ?
+              >= budget_minor
+
+            THEN
+              'EXHAUSTED'
+
+            ELSE
+              status
+
+          END,
+
+        updated_at =
+          CURRENT_TIMESTAMP
+
+      WHERE task_id = ?
+
+    `).run(
+
+      amount,
+
+      amount,
+
+      amount,
+
+      taskId
+
+    );
+
+
+    return db.prepare(`
+      SELECT *
+      FROM campaign_budgets
+      WHERE task_id = ?
+    `).get(taskId);
+
+  })();
+
 }
 
 
@@ -622,12 +892,21 @@ function spendCampaignBudget({
  */
 
 module.exports = {
+
   toMinor,
+
   getOrCreateAdvertiserAccount,
+
   getAdvertiserBalance,
+
   assertSufficientFunds,
+
   createAdvertiserTransaction,
+
   reserveCampaignBudget,
+
   releaseCampaignBudget,
+
   spendCampaignBudget
+
 };
