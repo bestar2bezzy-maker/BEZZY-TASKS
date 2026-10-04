@@ -192,6 +192,24 @@ if (
           externalEventId
         );
 
+   if (existingEvent) {
+
+  return res.status(200).json({
+    status:
+      existingEvent.verification_status,
+
+    verification_event_id:
+      existingEvent.id,
+
+    completion_id:
+      existingEvent.completion_id,
+
+    duplicate:
+      true
+  });
+
+                   }
+
 
       /*
        * --------------------------------------------------------
