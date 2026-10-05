@@ -7,6 +7,8 @@ const env = require('../config/env');
 
 const {
   signAccessToken,
+  generateRefreshToken,
+  hashRefreshToken,
   requireAuth,
   requireRole
 } = require('../middleware/auth');
@@ -2519,7 +2521,6 @@ if (!passwordOk) {
           'Veuillez vérifier votre adresse e-mail avant de vous connecter.'
       });
     }
-
     /*
      * ========================================================
      * CREATION ACCESS TOKEN
@@ -2527,15 +2528,101 @@ if (!passwordOk) {
      */
 
     const accessToken = signAccessToken({
-  id: user.id,
-  role: user.role || 'USER',
-  country_code: user.country_code || 'CG'
-});
+      id: user.id,
+      role: user.role || 'USER',
+      country_code: user.country_code || 'CG'
+    });
 
-return res.status(200).json({
-  success: true,
-  access_token: accessToken,
-  token: accessToken,
+
+    /*
+     * ========================================================
+     * CREATION REFRESH TOKEN
+     * ========================================================
+     *
+     * Le token brut n'est jamais enregistré en base.
+     * Seul son hash SHA-256 est conservé.
+     */
+
+    const refreshToken =
+      generateRefreshToken();
+
+    const refreshTokenHash =
+      hashRefreshToken(refreshToken);
+
+
+    /*
+     * Durée :
+     * 30 jours.
+     */
+
+    const refreshExpiresAt = new Date(
+      Date.now() +
+      30 * 24 * 60 * 60 * 1000
+    ).toISOString();
+
+
+    /*
+     * Supprimer les anciens refresh tokens
+     * expirés ou révoqués de cet utilisateur.
+     */
+
+    db.prepare(`
+      DELETE FROM refresh_tokens
+      WHERE user_id = ?
+        AND (
+          revoked_at IS NOT NULL
+          OR expires_at <= ?
+        )
+    `).run(
+      user.id,
+      new Date().toISOString()
+    );
+
+
+    /*
+     * Enregistrer uniquement le hash.
+     */
+
+    db.prepare(`
+      INSERT INTO refresh_tokens (
+        user_id,
+        token_hash,
+        expires_at
+      )
+      VALUES (?, ?, ?)
+    `).run(
+      user.id,
+      refreshTokenHash,
+      refreshExpiresAt
+    );
+
+
+    /*
+     * ========================================================
+     * COOKIE REFRESH TOKEN
+     * ========================================================
+     *
+     * HttpOnly :
+     * le JavaScript de la page ne peut pas lire le token.
+     *
+     * Secure :
+     * transmis uniquement en HTTPS.
+     *
+     * SameSite=Lax :
+     * protection supplémentaire contre les requêtes
+     * cross-site.
+     */
+
+    res.setHeader(
+      'Set-Cookie',
+      `bz_refresh_token=${refreshToken}; Max-Age=2592000; Path=/api/auth; HttpOnly; Secure; SameSite=Lax`
+    );
+
+
+    return res.status(200).json({
+      success: true,
+      access_token: accessToken,
+      token: accessToken,
       user: {
         id: user.id,
         email: user.email,
