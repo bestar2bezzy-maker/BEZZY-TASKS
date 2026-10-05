@@ -2990,7 +2990,26 @@ async function loadHistory() {
    DÉCONNEXION
    ============================================================ */
 
-function logout() {
+async function logout() {
+
+  try {
+
+    await fetch(
+      "/api/auth/logout",
+      {
+        method: "POST",
+        credentials: "include"
+      }
+    );
+
+  } catch (error) {
+
+    console.error(
+      "LOGOUT_ERROR:",
+      error
+    );
+
+  }
 
   localStorage.removeItem(
     "bz_token"
