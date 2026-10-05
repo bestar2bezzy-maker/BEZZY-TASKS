@@ -1433,18 +1433,95 @@ header{
 
   </div>
 
-
-  <div class="sectionHead">
-    <div>
-      <h2>Missions pour vous</h2>
-      <p class="muted small">
-        Choisis une mission et commence à gagner.
-      </p>
-    </div>
+<div class="sectionHead">
+  <div>
+    <h2>Missions pour vous</h2>
+    <p class="muted small">
+      Choisis une mission et commence à gagner.
+    </p>
   </div>
 
+  <button
+    type="button"
+    class="secondary"
+    id="refreshOffersBtn"
+  >
+    🔄 Actualiser
+  </button>
+</div>
 
-  <div id="offersPane">
+
+<div
+  class="card"
+  style="
+    margin-bottom:16px;
+    display:grid;
+    gap:12px
+  "
+>
+
+  <div
+    style="
+      display:grid;
+      grid-template-columns:
+        minmax(0,1fr)
+        auto
+        auto;
+      gap:8px
+    "
+  >
+
+    <input
+      id="offerSearch"
+      type="search"
+      placeholder="🔎 Rechercher une mission..."
+      autocomplete="off"
+    >
+
+    <select
+      id="offerFilter"
+      aria-label="Filtrer les missions"
+    >
+      <option value="all">
+        Toutes
+      </option>
+
+      <option value="available">
+        Disponibles
+      </option>
+
+      <option value="started">
+        En cours
+      </option>
+    </select>
+
+    <select
+      id="offerSort"
+      aria-label="Trier les missions"
+    >
+      <option value="newest">
+        Plus récentes
+      </option>
+
+      <option value="reward_desc">
+        Récompense : + élevée
+      </option>
+
+      <option value="reward_asc">
+        Récompense : + faible
+      </option>
+
+      <option value="title">
+        Nom
+      </option>
+    </select>
+
+  </div>
+
+</div>
+
+
+<div id="offersPane">
     <div id="offers" class="offers"></div>
   </div>
 
@@ -2669,14 +2746,24 @@ async function load() {
    OFFRES — NOUVEAU MOTEUR /api/tasks
    ============================================================ */
 
+/* ============================================================
+   DÉMARRER / CONTINUER UNE MISSION
+   ============================================================ */
+
 async function startOffer(id) {
 
   try {
 
     if (!id) {
-      toast("Mission invalide.");
+
+      toast(
+        "Mission invalide."
+      );
+
       return;
+
     }
+
 
     const data =
       await api(
@@ -2689,21 +2776,96 @@ async function startOffer(id) {
         }
       );
 
-    if (data?.completion) {
+
+    const completion =
+      data?.completion;
+
+
+    if (!completion) {
 
       toast(
-        data.completion.status === "STARTED"
-          ? "Mission démarrée. Vous pouvez maintenant l'effectuer."
-          : "Mission déjà enregistrée."
+        "Mission démarrée."
       );
 
-    } else {
-
-      toast("Mission démarrée.");
+      await loadTaskHistory();
+      return;
 
     }
 
+
+    const status =
+      String(
+        completion.status || ""
+      ).toUpperCase();
+
+
+    /*
+     * MISSION DÉMARRÉE
+     */
+
+    if (status === "STARTED") {
+
+      toast(
+        "🟢 Mission démarrée. Vous pouvez maintenant l'effectuer."
+      );
+
+    }
+
+
+    /*
+     * MISSION DÉJÀ EN COURS
+     */
+
+    else if (status === "PENDING") {
+
+      toast(
+        "⏳ Cette mission est déjà en cours de vérification."
+      );
+
+    }
+
+
+    /*
+     * MISSION DÉJÀ VALIDÉE
+     */
+
+    else if (status === "APPROVED") {
+
+      toast(
+        "✅ Cette mission a déjà été validée."
+      );
+
+    }
+
+
+    /*
+     * AUTRE ÉTAT
+     */
+
+    else {
+
+      toast(
+        "Mission : " +
+        (completion.status || "enregistrée")
+      );
+
+    }
+
+
+    /*
+     * Recharge l'état réel des missions
+     */
+
+    await loadTaskHistory();
+
+
   } catch (error) {
+
+    console.error(
+      "BEZZY START TASK ERROR:",
+      error
+    );
+
 
     toast(
       error?.message ||
@@ -2713,9 +2875,413 @@ async function startOffer(id) {
   }
 
   }
-
+  
 /* ============================================================
    CHARGEMENT DES MISSIONS — /api/tasks
+   ============================================================ */
+
+let bezzyTasksCache = [];
+
+
+/* ============================================================
+   AFFICHAGE DES MISSIONS
+   ============================================================ */
+
+function renderOffers(rows) {
+
+  const searchInput =
+    $("offerSearch");
+
+  const filterSelect =
+    $("offerFilter");
+
+  const sortSelect =
+    $("offerSort");
+
+
+  const search =
+    String(
+      searchInput?.value || ""
+    )
+      .trim()
+      .toLowerCase();
+
+
+  const filter =
+    filterSelect?.value || "all";
+
+
+  const sort =
+    sortSelect?.value || "newest";
+
+
+  let filtered =
+    Array.isArray(rows)
+      ? [...rows]
+      : [];
+
+
+  /*
+   * RECHERCHE
+   */
+
+  if (search) {
+
+    filtered =
+      filtered.filter(task => {
+
+        const title =
+          String(
+            task.title || ""
+          ).toLowerCase();
+
+        const description =
+          String(
+            task.description || ""
+          ).toLowerCase();
+
+        return (
+          title.includes(search) ||
+          description.includes(search)
+        );
+
+      });
+
+  }
+
+
+  /*
+   * FILTRE
+   *
+   * Pour le moment, "started" utilise
+   * les statuts éventuellement fournis
+   * par le backend.
+   */
+
+  if (filter === "available") {
+
+    filtered =
+      filtered.filter(task => {
+
+        const status =
+          String(
+            task.status ||
+            task.completion_status ||
+            ""
+          ).toUpperCase();
+
+        return (
+          !status ||
+          status === "AVAILABLE" ||
+          status === "ACTIVE"
+        );
+
+      });
+
+  }
+
+
+  if (filter === "started") {
+
+    filtered =
+      filtered.filter(task => {
+
+        const status =
+          String(
+            task.status ||
+            task.completion_status ||
+            ""
+          ).toUpperCase();
+
+        return (
+          status === "STARTED" ||
+          status === "PENDING"
+        );
+
+      });
+
+  }
+
+
+  /*
+   * TRI
+   */
+
+  if (sort === "reward_desc") {
+
+    filtered.sort(
+      (a, b) =>
+        Number(b.reward || 0) -
+        Number(a.reward || 0)
+    );
+
+  }
+
+
+  if (sort === "reward_asc") {
+
+    filtered.sort(
+      (a, b) =>
+        Number(a.reward || 0) -
+        Number(b.reward || 0)
+    );
+
+  }
+
+
+  if (sort === "title") {
+
+    filtered.sort(
+      (a, b) =>
+        String(a.title || "")
+          .localeCompare(
+            String(b.title || ""),
+            "fr",
+            {
+              sensitivity: "base"
+            }
+          )
+    );
+
+  }
+
+
+  /*
+   * PLUS RÉCENTES
+   *
+   * On conserve l'ordre renvoyé
+   * par le backend.
+   */
+
+
+  /*
+   * AUCUN RÉSULTAT
+   */
+
+  if (!filtered.length) {
+
+    $("offers").innerHTML = `
+
+      <div class="card">
+
+        <div
+          style="
+            font-size:32px;
+            margin-bottom:8px
+          "
+        >
+          🔎
+        </div>
+
+        <strong>
+          Aucune mission trouvée
+        </strong>
+
+        <p class="muted small">
+          Essayez une autre recherche
+          ou modifiez vos filtres.
+        </p>
+
+      </div>
+
+    `;
+
+    return;
+
+  }
+
+
+  /*
+   * AFFICHAGE
+   */
+
+  $("offers").innerHTML =
+    filtered.map(task => {
+
+      const reward =
+        Number(
+          task.reward || 0
+        );
+
+      const currency =
+        task.currency || "XAF";
+
+      const title =
+        task.title ||
+        "Mission Bezzy";
+
+      const description =
+        task.description ||
+        "Complétez cette mission pour recevoir votre récompense.";
+
+
+      const status =
+        String(
+          task.status ||
+          task.completion_status ||
+          ""
+        ).toUpperCase();
+
+
+      const isStarted =
+        status === "STARTED";
+
+
+      const isPending =
+        status === "PENDING";
+
+
+      let buttonText =
+        "Commencer la mission ↗";
+
+
+      if (isStarted) {
+        buttonText =
+          "Continuer la mission →";
+      }
+
+
+      if (isPending) {
+        buttonText =
+          "Mission en vérification ⏳";
+      }
+
+
+      return `
+
+        <article
+          class="offer"
+          data-task-id="${Number(task.id)}"
+        >
+
+          <div class="offerTop">
+
+            <div class="offerType">
+
+              <span class="offerIcon">
+                📱
+              </span>
+
+              <span>
+                MISSION
+              </span>
+
+            </div>
+
+
+            <div class="reward">
+
+              +${reward.toLocaleString("fr-FR")}
+              ${esc(currency)}
+
+            </div>
+
+          </div>
+
+
+          <h3>
+            ${esc(title)}
+          </h3>
+
+
+          <p class="muted">
+            ${esc(description)}
+          </p>
+
+
+          <div class="offerMeta">
+
+            <span>
+              ⚡ Mission rémunérée
+            </span>
+
+            <span>
+              ✓ Validation automatique
+            </span>
+
+          </div>
+
+
+          ${
+            isStarted
+              ? `
+                <div
+                  class="small"
+                  style="
+                    margin-top:10px;
+                    font-weight:600
+                  "
+                >
+                  🟢 Mission en cours
+                </div>
+              `
+              : ""
+          }
+
+
+          ${
+            isPending
+              ? `
+                <div
+                  class="small"
+                  style="
+                    margin-top:10px;
+                    font-weight:600
+                  "
+                >
+                  ⏳ Vérification en cours
+                </div>
+              `
+              : ""
+          }
+
+
+          <div class="actions">
+
+            <button
+              type="button"
+              class="secondary"
+              onclick="showOfferDetails(${Number(task.id)})"
+            >
+              🔎 Voir les détails
+            </button>
+
+
+            ${
+              !isPending
+                ? `
+                  <button
+                    type="button"
+                    class="primary"
+                    onclick="startOffer(${Number(task.id)})"
+                  >
+                    ${buttonText}
+                  </button>
+                `
+                : ""
+            }
+
+          </div>
+
+
+          <p class="small muted">
+
+            La récompense affichée est calculée
+            automatiquement par Bezzy Tasks.
+
+          </p>
+
+        </article>
+
+      `;
+
+    }).join("");
+
+}
+
+
+/* ============================================================
+   CHARGEMENT DES MISSIONS
    ============================================================ */
 
 async function loadOffers() {
@@ -2725,6 +3291,7 @@ async function loadOffers() {
     const response =
       await api("/api/tasks");
 
+
     const rows =
       Array.isArray(response)
         ? response
@@ -2732,108 +3299,18 @@ async function loadOffers() {
           ? response.tasks
           : [];
 
-    $("offers").innerHTML =
-      rows.length
 
-        ? rows.map(task => {
-
-            const reward =
-              Number(task.reward || 0);
-
-            const currency =
-              task.currency || "XAF";
-
-            const title =
-              task.title || "Mission Bezzy";
-
-            const description =
-              task.description ||
-              "Complétez cette mission pour recevoir votre récompense.";
-
-            return `
-
-              <article class="offer">
-
-                <div class="offerTop">
-
-                  <div class="offerType">
-
-                    <span class="offerIcon">
-                      📱
-                    </span>
-
-                    <span>
-                      MISSION
-                    </span>
-
-                  </div>
-
-                  <div class="reward">
-                    +${reward.toLocaleString("fr-FR")}
-                    ${esc(currency)}
-                  </div>
-
-                </div>
+    bezzyTasksCache =
+  rows;
 
 
-                <h3>
-                  ${esc(title)}
-                </h3>
+await loadTaskHistory();
 
 
-                <p class="muted">
-                  ${esc(description)}
-                </p>
+renderOffers(
+  bezzyTasksCache
+);
 
-
-                <div class="offerMeta">
-
-                  <span>
-                    ⚡ Mission rémunérée
-                  </span>
-
-                  <span>
-                    ✓ Validation automatique
-                  </span>
-
-                </div>
-
-
-                <div class="actions">
-
-                  <button
-                    class="primary"
-                    onclick="startOffer(${Number(task.id)})">
-
-                    Commencer la mission ↗
-
-                  </button>
-
-                </div>
-
-
-                <p class="small muted">
-
-                  La récompense affichée est calculée
-                  automatiquement par Bezzy Tasks.
-
-                </p>
-
-              </article>
-
-            `;
-
-          }).join("")
-
-        : `
-
-          <div class="card">
-
-            Aucune mission disponible pour le moment.
-
-          </div>
-
-        `;
 
   } catch (error) {
 
@@ -2842,6 +3319,25 @@ async function loadOffers() {
       error
     );
 
+
+    $("offers").innerHTML = `
+
+      <div class="card">
+
+        <strong>
+          Impossible de charger les missions.
+        </strong>
+
+        <p class="muted small">
+          Vérifiez votre connexion puis
+          actualisez les missions.
+        </p>
+
+      </div>
+
+    `;
+
+
     toast(
       error?.message ||
       "Impossible de charger les missions."
@@ -2849,8 +3345,210 @@ async function loadOffers() {
 
   }
 
+}
+
+
+/* ============================================================
+   DÉTAILS D'UNE MISSION
+   ============================================================ */
+
+async function showOfferDetails(id) {
+
+  try {
+
+    if (!id) {
+
+      toast(
+        "Mission invalide."
+      );
+
+      return;
+
+    }
+
+
+    const data =
+      await api(
+        "/api/tasks/" +
+        encodeURIComponent(id)
+      );
+
+
+    const task =
+      data?.task ||
+      data;
+
+
+    if (!task) {
+
+      toast(
+        "Impossible de récupérer les détails."
+      );
+
+      return;
+
+    }
+
+
+    const reward =
+      Number(
+        task.reward || 0
+      );
+
+
+    const currency =
+      task.currency || "XAF";
+
+
+    const title =
+      task.title ||
+      "Mission Bezzy";
+
+
+    const description =
+      task.description ||
+      "Aucune description disponible.";
+
+
+    alert(
+      title +
+      "\n\n" +
+      description +
+      "\n\n" +
+      "Récompense : +" +
+      reward.toLocaleString("fr-FR") +
+      " " +
+      currency
+    );
+
+
+  } catch (error) {
+
+    console.error(
+      "BEZZY TASK DETAILS ERROR:",
+      error
+    );
+
+
+    toast(
+      error?.message ||
+      "Impossible de charger les détails."
+    );
+
   }
-  
+
+}
+
+
+/* ============================================================
+   CONTRÔLES DES MISSIONS
+   ============================================================ */
+
+function initOfferControls() {
+
+  const search =
+    $("offerSearch");
+
+  const filter =
+    $("offerFilter");
+
+  const sort =
+    $("offerSort");
+
+  const refresh =
+    $("refreshOffersBtn");
+
+
+  if (search) {
+
+    search.addEventListener(
+      "input",
+      () => {
+
+        renderOffers(
+          bezzyTasksCache
+        );
+
+      }
+    );
+
+  }
+
+
+  if (filter) {
+
+    filter.addEventListener(
+      "change",
+      () => {
+
+        renderOffers(
+          bezzyTasksCache
+        );
+
+      }
+    );
+
+  }
+
+
+  if (sort) {
+
+    sort.addEventListener(
+      "change",
+      () => {
+
+        renderOffers(
+          bezzyTasksCache
+        );
+
+      }
+    );
+
+  }
+
+
+  if (refresh) {
+
+    refresh.addEventListener(
+      "click",
+      async () => {
+
+        refresh.disabled =
+          true;
+
+        refresh.textContent =
+          "⏳ Chargement...";
+
+
+        try {
+
+          await loadOffers();
+
+        } finally {
+
+          refresh.disabled =
+            false;
+
+          refresh.textContent =
+            "🔄 Actualiser";
+
+        }
+
+      }
+    );
+
+  }
+
+}
+
+
+/* ============================================================
+   INITIALISATION DES CONTRÔLES
+   ============================================================ */
+
+initOfferControls();
+
+
   /* ============================================================
    BEZZY TASKS — PARTIE 2D
    ONGLETS + HISTORIQUE + DÉCONNEXION
@@ -2988,6 +3686,123 @@ async function loadHistory() {
 
 }
 
+  /* ============================================================
+   BEZZY TASKS — ÉTAT DES MISSIONS DE L'UTILISATEUR
+   ============================================================ */
+
+let bezzyTaskHistory = [];
+
+
+/* ============================================================
+   CHARGER L'HISTORIQUE DES MISSIONS
+   ============================================================ */
+
+async function loadTaskHistory() {
+
+  try {
+
+    const response =
+      await api("/api/tasks/history/me");
+
+
+    const rows =
+      Array.isArray(response)
+        ? response
+        : Array.isArray(response.history)
+          ? response.history
+          : Array.isArray(response.completions)
+            ? response.completions
+            : [];
+
+
+    bezzyTaskHistory =
+      rows;
+
+
+    /*
+     * Met à jour l'affichage des missions
+     * avec leur véritable statut utilisateur.
+     */
+
+    if (
+      Array.isArray(bezzyTasksCache) &&
+      bezzyTasksCache.length
+    ) {
+
+      const historyMap =
+        new Map();
+
+
+      rows.forEach(item => {
+
+        const taskId =
+          Number(
+            item.task_id ||
+            item.taskId ||
+            item.id
+          );
+
+
+        if (!taskId) {
+          return;
+        }
+
+
+        historyMap.set(
+          taskId,
+          item
+        );
+
+      });
+
+
+      bezzyTasksCache =
+        bezzyTasksCache.map(task => {
+
+          const history =
+            historyMap.get(
+              Number(task.id)
+            );
+
+
+          if (!history) {
+
+            return {
+              ...task,
+              completion_status: ""
+            };
+
+          }
+
+
+          return {
+            ...task,
+            completion_status:
+              String(
+                history.status || ""
+              ).toUpperCase()
+          };
+
+        });
+
+
+      renderOffers(
+        bezzyTasksCache
+      );
+
+    }
+
+
+  } catch (error) {
+
+    console.error(
+      "BEZZY TASK HISTORY ERROR:",
+      error
+    );
+
+  }
+
+  }
 
 /* ============================================================
    DÉCONNEXION
