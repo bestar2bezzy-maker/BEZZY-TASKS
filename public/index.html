@@ -1872,7 +1872,10 @@ function showAuth(mode) {
   }
 
   if($("forgotPasswordBox")){
-    $("forgotPasswordBox").classList.remove("hidden");
+  $("forgotPasswordBox").classList.toggle(
+    "hidden",
+    mode !== "login"
+  );
   }
 
   const register =
@@ -1895,11 +1898,11 @@ function showAuth(mode) {
       !register
     );
 
-  $("googleRegisterBlock")
+$("googleRegisterBlock")
   .classList
   .toggle(
     "hidden",
-    false
+    mode !== "login"
   );
 
   $("authTitle").textContent =
