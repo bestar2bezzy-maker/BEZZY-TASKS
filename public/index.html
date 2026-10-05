@@ -1708,35 +1708,160 @@ function esc(value) {
 }
 
 async function api(url, options = {}) {
-  options.headers = {
-    ...(options.headers || {}),
-    "Content-Type": "application/json",
+async function refreshAccessToken() {
 
-    ...(token
-      ? {
-          "Authorization": "Bearer " + token
+  try {
+
+    const response =
+      await fetch(
+        "/api/auth/refresh",
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json"
+          }
         }
-      : {})
+      );
+
+    const data =
+      await response
+        .json()
+        .catch(() => ({}));
+
+    if (
+      !response.ok ||
+      !data.access_token
+    ) {
+      return false;
+    }
+
+    token =
+      data.access_token;
+
+    localStorage.setItem(
+      "bz_token",
+      token
+    );
+
+    return true;
+
+  } catch (error) {
+
+    console.error(
+      "ACCESS_TOKEN_REFRESH_FAILED:",
+      error
+    );
+
+    return false;
+  }
+}
+
+
+async function api(
+  url,
+  options = {},
+  retry = true
+) {
+
+  const requestOptions = {
+    ...options,
+    credentials: "include",
+    headers: {
+      ...(options.headers || {}),
+      "Content-Type":
+        "application/json",
+
+      ...(token
+        ? {
+            "Authorization":
+              "Bearer " + token
+          }
+        : {})
+    }
   };
 
-  const response =
-    await fetch(url, options);
+
+  let response;
+
+  try {
+
+    response =
+      await fetch(
+        url,
+        requestOptions
+      );
+
+  } catch (error) {
+
+    throw Error(
+      "Impossible de contacter le serveur."
+    );
+
+  }
+
+
+  /*
+   * ========================================================
+   * TOKEN EXPIRE
+   * ========================================================
+   *
+   * On tente une seule fois de récupérer
+   * automatiquement un nouvel access token.
+   */
+
+  if (
+    response.status === 401 &&
+    retry &&
+    url !== "/api/auth/refresh"
+  ) {
+
+    const refreshed =
+      await refreshAccessToken();
+
+    if (refreshed) {
+
+      return api(
+        url,
+        options,
+        false
+      );
+
+    }
+
+    /*
+     * Le refresh a échoué.
+     * On supprime uniquement l'access token local.
+     */
+
+    token = null;
+
+    localStorage.removeItem(
+      "bz_token"
+    );
+
+  }
+
 
   const data =
     await response
       .json()
       .catch(() => ({}));
 
+
   if (!response.ok) {
+
     throw Error(
       data.error ||
       data.message ||
       "Une erreur est survenue."
     );
+
   }
 
+
   return data;
-}
+  }
 
 
 /* ============================================================
