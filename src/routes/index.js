@@ -2643,6 +2643,204 @@ if (!passwordOk) {
 
 /*
  * ============================================================
+ * REFRESH ACCESS TOKEN
+ * V33.6.3
+ * ============================================================
+ */
+
+router.post('/auth/refresh', (req, res, next) => {
+  try {
+
+    /*
+     * Lire le cookie refresh token.
+     */
+    const cookies = String(
+      req.headers.cookie || ''
+    )
+      .split(';')
+      .map(x => x.trim());
+
+    const refreshCookie = cookies.find(
+      x => x.startsWith('bz_refresh_token=')
+    );
+
+    if (!refreshCookie) {
+      return res.status(401).json({
+        error: 'REFRESH_TOKEN_REQUIRED',
+        message:
+          'Refresh token required'
+      });
+    }
+
+    const refreshToken =
+      refreshCookie.substring(
+        'bz_refresh_token='.length
+      );
+
+    if (!refreshToken) {
+      return res.status(401).json({
+        error: 'INVALID_REFRESH_TOKEN',
+        message:
+          'Invalid refresh token'
+      });
+    }
+
+
+    /*
+     * Calculer le hash du token reçu.
+     */
+    const refreshTokenHash =
+      hashRefreshToken(refreshToken);
+
+
+    const db = getDb();
+
+
+    /*
+     * Chercher uniquement un token :
+     * - correspondant au hash
+     * - non révoqué
+     * - non expiré
+     */
+    const storedToken = db.prepare(`
+      SELECT
+        rt.id,
+        rt.user_id,
+        rt.expires_at,
+        u.role,
+        u.country_code,
+        u.status,
+        u.email_verified_at
+      FROM refresh_tokens rt
+      INNER JOIN users u
+        ON u.id = rt.user_id
+      WHERE rt.token_hash = ?
+        AND rt.revoked_at IS NULL
+        AND rt.expires_at > ?
+      LIMIT 1
+    `).get(
+      refreshTokenHash,
+      new Date().toISOString()
+    );
+
+
+    /*
+     * Token absent, expiré ou révoqué.
+     */
+    if (!storedToken) {
+
+      /*
+       * Effacer le cookie invalide.
+       */
+      res.setHeader(
+        'Set-Cookie',
+        'bz_refresh_token=; Max-Age=0; Path=/api/auth; HttpOnly; Secure; SameSite=Lax'
+      );
+
+      return res.status(401).json({
+        error: 'INVALID_REFRESH_TOKEN',
+        message:
+          'Invalid or expired refresh token'
+      });
+    }
+
+
+    /*
+     * Vérifier que le compte est toujours actif.
+     */
+    if (
+      storedToken.status &&
+      String(storedToken.status).toUpperCase() !== 'ACTIVE'
+    ) {
+
+      return res.status(403).json({
+        error: 'ACCOUNT_DISABLED',
+        message:
+          'This account is not active'
+      });
+    }
+
+
+    /*
+     * ========================================================
+     * ROTATION DU REFRESH TOKEN
+     * ========================================================
+     *
+     * L'ancien token est immédiatement révoqué.
+     * Un nouveau refresh token est créé.
+     */
+
+    db.prepare(`
+      UPDATE refresh_tokens
+      SET revoked_at = ?
+      WHERE id = ?
+    `).run(
+      new Date().toISOString(),
+      storedToken.id
+    );
+
+
+    const newRefreshToken =
+      generateRefreshToken();
+
+    const newRefreshTokenHash =
+      hashRefreshToken(newRefreshToken);
+
+    const newRefreshExpiresAt =
+      new Date(
+        Date.now() +
+        30 * 24 * 60 * 60 * 1000
+      ).toISOString();
+
+
+    db.prepare(`
+      INSERT INTO refresh_tokens (
+        user_id,
+        token_hash,
+        expires_at
+      )
+      VALUES (?, ?, ?)
+    `).run(
+      storedToken.user_id,
+      newRefreshTokenHash,
+      newRefreshExpiresAt
+    );
+
+
+    /*
+     * Créer le nouvel access token.
+     */
+    const accessToken =
+      signAccessToken({
+        id: storedToken.user_id,
+        role: storedToken.role || 'USER',
+        country_code:
+          storedToken.country_code || 'CG'
+      });
+
+
+    /*
+     * Remplacer le cookie par le nouveau refresh token.
+     */
+    res.setHeader(
+      'Set-Cookie',
+      `bz_refresh_token=${newRefreshToken}; Max-Age=2592000; Path=/api/auth; HttpOnly; Secure; SameSite=Lax`
+    );
+
+
+    return res.status(200).json({
+      success: true,
+      access_token: accessToken,
+      token: accessToken
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
+/*
+ * ============================================================
  * GOOGLE OAUTH
  * V33.2.13
  * ============================================================
