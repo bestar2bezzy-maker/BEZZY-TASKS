@@ -2839,6 +2839,81 @@ router.post('/auth/refresh', (req, res, next) => {
   }
 });
 
+  /*
+ * ============================================================
+ * LOGOUT
+ * V33.6.4
+ * ============================================================
+ *
+ * Révoque le refresh token actuel et supprime
+ * le cookie de session.
+ */
+
+router.post('/auth/logout', (req, res, next) => {
+  try {
+
+    const cookies = String(
+      req.headers.cookie || ''
+    )
+      .split(';')
+      .map(x => x.trim());
+
+    const refreshCookie = cookies.find(
+      x => x.startsWith('bz_refresh_token=')
+    );
+
+    /*
+     * Si aucun refresh token n'existe,
+     * la déconnexion est quand même considérée
+     * comme réussie.
+     */
+    if (refreshCookie) {
+
+      const refreshToken =
+        refreshCookie.substring(
+          'bz_refresh_token='.length
+        );
+
+      if (refreshToken) {
+
+        const refreshTokenHash =
+          hashRefreshToken(refreshToken);
+
+        const db = getDb();
+
+        /*
+         * Révoquer uniquement le token actuel.
+         */
+        db.prepare(`
+          UPDATE refresh_tokens
+          SET revoked_at = ?
+          WHERE token_hash = ?
+            AND revoked_at IS NULL
+        `).run(
+          new Date().toISOString(),
+          refreshTokenHash
+        );
+      }
+    }
+
+    /*
+     * Supprimer le cookie côté navigateur.
+     */
+    res.setHeader(
+      'Set-Cookie',
+      'bz_refresh_token=; Max-Age=0; Path=/api/auth; HttpOnly; Secure; SameSite=Lax'
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'Déconnexion réussie'
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
 /*
  * ============================================================
  * GOOGLE OAUTH
