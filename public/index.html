@@ -2875,6 +2875,142 @@ async function startOffer(id) {
   }
 
   }
+
+  /* ============================================================
+   SOUMETTRE UNE MISSION
+   ============================================================ */
+
+async function submitOffer(id) {
+
+  try {
+
+    if (!id) {
+
+      toast(
+        "Mission invalide."
+      );
+
+      return;
+
+    }
+
+
+    const evidence =
+      prompt(
+        "Décrivez brièvement ce que vous avez réalisé pour cette mission :"
+      );
+
+
+    if (
+      evidence === null
+    ) {
+
+      return;
+
+    }
+
+
+    if (
+      !evidence.trim()
+    ) {
+
+      toast(
+        "Veuillez fournir une preuve ou une description."
+      );
+
+      return;
+
+    }
+
+
+    const data =
+      await api(
+        "/api/tasks/" +
+        encodeURIComponent(id) +
+        "/submit",
+        {
+          method: "POST",
+
+          body: JSON.stringify({
+            evidence: {
+              description:
+                evidence.trim()
+            }
+          })
+
+        }
+      );
+
+
+    const completion =
+      data?.completion;
+
+
+    const status =
+      String(
+        completion?.status || ""
+      ).toUpperCase();
+
+
+    if (status === "PENDING") {
+
+      toast(
+        "⏳ Mission envoyée. Elle est maintenant en vérification."
+      );
+
+    }
+
+    else if (
+      status === "APPROVED"
+    ) {
+
+      toast(
+        "✅ Mission validée !"
+      );
+
+    }
+
+    else if (
+      status === "REJECTED"
+    ) {
+
+      toast(
+        "❌ La mission a été refusée."
+      );
+
+    }
+
+    else {
+
+      toast(
+        "Mission envoyée avec succès."
+      );
+
+    }
+
+
+    await loadTaskHistory();
+
+
+    await loadOffers();
+
+
+  } catch (error) {
+
+    console.error(
+      "BEZZY SUBMIT TASK ERROR:",
+      error
+    );
+
+
+    toast(
+      error?.message ||
+      "Impossible de soumettre la mission."
+    );
+
+  }
+
+                       }
   
 /* ============================================================
    CHARGEMENT DES MISSIONS — /api/tasks
