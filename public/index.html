@@ -1707,7 +1707,7 @@ function esc(value) {
   );
 }
 
-async function api(url, options = {}) {
+
 async function refreshAccessToken() {
 
   try {
@@ -1828,11 +1828,6 @@ async function api(
       );
 
     }
-
-    /*
-     * Le refresh a échoué.
-     * On supprime uniquement l'access token local.
-     */
 
     token = null;
 
