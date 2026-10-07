@@ -2616,6 +2616,7 @@ if (copyReferralBtn) {
    BEZZY TASKS — PARTIE 2C
    TABLEAU DE BORD + OFFRES
    ============================================================ */
+
 async function load() {
 
   if (!token) {
@@ -2628,22 +2629,17 @@ async function load() {
     }
   }
 
+  /*
+   * IMPORTANT :
+   * Cette partie gère uniquement l'authentification.
+   * Une erreur des missions ne doit jamais déconnecter
+   * l'utilisateur.
+   */
   try {
 
     const response =
       await api("/api/me");
 
-    /*
-     * Le backend renvoie :
-     *
-     * {
-     *   user: {
-     *     ...
-     *   }
-     * }
-     *
-     * On récupère donc le profil dans response.user.
-     */
     const me =
       response.user || response;
 
@@ -2657,12 +2653,6 @@ async function load() {
       .remove("hidden");
 
 
-    /*
-     * SOLDE
-     *
-     * Ces valeurs pourront venir directement
-     * du profil lorsque le backend les exposera.
-     */
     $("balance").textContent =
       Number(me.balance || 0)
         .toLocaleString("fr-FR");
@@ -2675,9 +2665,6 @@ async function load() {
       ).toLocaleString("fr-FR");
 
 
-    /*
-     * PARRAINAGE
-     */
     $("ref").textContent =
       me.referral_code || "—";
 
@@ -2685,16 +2672,10 @@ async function load() {
       me.referral_code || "—";
 
 
-    /*
-     * TELEPHONE
-     */
     $("phoneShow").textContent =
       me.phone || "—";
 
 
-    /*
-     * HEADER
-     */
     $("headerActions").innerHTML = `
       <button
         class="secondary"
@@ -2705,9 +2686,6 @@ async function load() {
     `;
 
 
-    /*
-     * ADMIN
-     */
     if (
       String(me.role || "").toLowerCase() === "admin"
     ) {
@@ -2723,25 +2701,51 @@ async function load() {
       `;
     }
 
+  } catch (error) {
+
+    console.error(
+      "BEZZY AUTH LOAD ERROR:",
+      error
+    );
 
     /*
-     * CHARGER LES MISSIONS
+     * api() tente déjà automatiquement le refresh
+     * lorsqu'il reçoit une erreur 401.
+     *
+     * Si le refresh échoue réellement,
+     * on revient à l'écran de connexion sans appeler
+     * /api/auth/logout.
      */
+    token = null;
+
+    localStorage.removeItem("bz_token");
+
+    $("appView")?.classList.add("hidden");
+    $("authView")?.classList.remove("hidden");
+
+    return;
+  }
+
+
+  /*
+   * Les missions sont indépendantes de la session.
+   * Une panne de /api/tasks ne doit donc jamais
+   * déconnecter l'utilisateur.
+   */
+  try {
+
     await loadOffers();
 
   } catch (error) {
 
     console.error(
-      "BEZZY LOAD ERROR:",
+      "BEZZY OFFERS LOAD ERROR:",
       error
     );
-
-    logout();
-
   }
   }
 
-  
+
 /* ============================================================
    OFFRES — NOUVEAU MOTEUR /api/tasks
    ============================================================ */
