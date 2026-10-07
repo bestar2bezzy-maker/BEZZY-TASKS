@@ -3270,29 +3270,84 @@ router.get('/auth/google/callback', async (req, res, next) => {
       );
     }
 
-
     /*
      * ========================================================
-     * JWT BEZZY TASKS
+     * JWT BEZZY TASKS + REFRESH TOKEN
      * ========================================================
+     *
+     * Google utilise le même système de session longue
+     * durée que la connexion e-mail / mot de passe.
      */
 
     const accessToken = signAccessToken({
-  id: user.id,
-  role: user.role || 'USER',
-  country_code: user.country_code || 'CG'
-});
+      id: user.id,
+      role: user.role || 'USER',
+      country_code: user.country_code || 'CG'
+    });
+
+
+    const refreshToken =
+      generateRefreshToken();
+
+    const refreshTokenHash =
+      hashRefreshToken(refreshToken);
+
+    const refreshExpiresAt = new Date(
+      Date.now() +
+      30 * 24 * 60 * 60 * 1000
+    ).toISOString();
+
+
+    /*
+     * Nettoyer les anciens tokens inutilisables
+     * de cet utilisateur.
+     */
+    db.prepare(`
+      DELETE FROM refresh_tokens
+      WHERE user_id = ?
+        AND (
+          revoked_at IS NOT NULL
+          OR expires_at <= ?
+        )
+    `).run(
+      user.id,
+      new Date().toISOString()
+    );
+
+
+    /*
+     * Enregistrer uniquement le hash.
+     */
+    db.prepare(`
+      INSERT INTO refresh_tokens (
+        user_id,
+        token_hash,
+        expires_at
+      )
+      VALUES (?, ?, ?)
+    `).run(
+      user.id,
+      refreshTokenHash,
+      refreshExpiresAt
+    );
+
+
+    /*
+     * Créer le cookie de session longue durée.
+     */
+    res.setHeader(
+      'Set-Cookie',
+      [
+        'bz_google_state=; Max-Age=0; Path=/api/auth/google; HttpOnly; Secure; SameSite=Lax',
+        `bz_refresh_token=${refreshToken}; Max-Age=2592000; Path=/api/auth; HttpOnly; Secure; SameSite=Lax`
+      ]
+    );
 
 
     /*
      * ========================================================
      * REDIRECTION VERS L'INTERFACE
      * ========================================================
-     *
-     * Le token est placé temporairement dans le hash URL.
-     * Le JavaScript de la page pourra ensuite le récupérer.
-     *
-     * Le hash n'est pas envoyé au serveur.
      */
 
     return res.redirect(
