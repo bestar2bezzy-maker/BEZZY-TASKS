@@ -3374,30 +3374,45 @@ function renderOffers(rows) {
 
           <div class="actions">
 
-            <button
-              type="button"
-              class="secondary"
-              onclick="showOfferDetails(${Number(task.id)})"
-            >
-              🔎 Voir les détails
-            </button>
+  <button
+    type="button"
+    class="secondary"
+    onclick="showOfferDetails(${Number(task.id)})"
+  >
+    🔎 Voir les détails
+  </button>
 
 
-            ${
-              !isPending
-                ? `
-                  <button
-                    type="button"
-                    class="primary"
-                    onclick="startOffer(${Number(task.id)})"
-                  >
-                    ${buttonText}
-                  </button>
-                `
-                : ""
-            }
+  ${
+    isStarted
+      ? `
+        <button
+          type="button"
+          class="primary"
+          onclick="submitOffer(${Number(task.id)})"
+        >
+          📤 Soumettre la mission
+        </button>
+      `
+      : ""
+  }
 
-          </div>
+
+  ${
+    !isStarted && !isPending
+      ? `
+        <button
+          type="button"
+          class="primary"
+          onclick="startOffer(${Number(task.id)})"
+        >
+          ${buttonText}
+        </button>
+      `
+      : ""
+  }
+
+</div>
 
 
           <p class="small muted">
@@ -3441,11 +3456,6 @@ async function loadOffers() {
 
 
 await loadTaskHistory();
-
-
-renderOffers(
-  bezzyTasksCache
-);
 
 
   } catch (error) {
@@ -3872,11 +3882,9 @@ async function loadTaskHistory() {
       rows.forEach(item => {
 
         const taskId =
-          Number(
-            item.task_id ||
-            item.taskId ||
-            item.id
-          );
+  Number(
+    item.task_id
+  );
 
 
         if (!taskId) {
