@@ -80,59 +80,6 @@ function applyRoleTransition(performanceId) {
   }
 
   const db = getDatabase();
-
-  /*
-   * ============================================================
-   * VERROU TEMPOREL
-   * ============================================================
-   *
-   * Une décision du mois M ne peut être appliquée
-   * qu'à partir du premier jour du mois M+1.
-   *
-   * Exemple :
-   *
-   * Évaluation septembre 2026
-   *        ↓
-   * Promotion disponible à partir du
-   * 1er octobre 2026
-   *
-   * ============================================================
-   */
-
-  const now = new Date();
-
-  const evaluationYear =
-    Number(performance?.evaluation_year);
-
-  const evaluationMonth =
-    Number(performance?.evaluation_month);
-
-  if (
-    Number.isInteger(evaluationYear) &&
-    Number.isInteger(evaluationMonth) &&
-    evaluationMonth >= 1 &&
-    evaluationMonth <= 12
-  ) {
-    const nextMonthStart =
-      new Date(
-        evaluationMonth === 12
-          ? evaluationYear + 1
-          : evaluationYear,
-        evaluationMonth === 12
-          ? 0
-          : evaluationMonth,
-        1,
-        0,
-        0,
-        0,
-        0
-      );
-
-    if (now < nextMonthStart) {
-      throw new Error('ROLE_TRANSITION_NOT_YET_AVAILABLE');
-    }
-  }
-
   const performance = db.prepare(`
     SELECT
       id,
@@ -155,6 +102,47 @@ function applyRoleTransition(performanceId) {
    * Seules les décisions PROMOTE sont appliquées
    * par cette première version.
    */
+
+    /*
+   * ============================================================
+   * VERROU TEMPOREL
+   * ============================================================
+   *
+   * Une décision du mois M ne peut être appliquée
+   * qu'à partir du premier jour du mois M+1.
+   *
+   * ============================================================
+   */
+
+  const now = new Date();
+
+  const evaluationYear =
+    Number(performance.evaluation_year);
+
+  const evaluationMonth =
+    Number(performance.evaluation_month);
+
+  const nextMonthStart =
+    new Date(
+      evaluationMonth === 12
+        ? evaluationYear + 1
+        : evaluationYear,
+      evaluationMonth === 12
+        ? 0
+        : evaluationMonth,
+      1,
+      0,
+      0,
+      0,
+      0
+    );
+
+  if (now < nextMonthStart) {
+    throw new Error(
+      'ROLE_TRANSITION_NOT_YET_AVAILABLE'
+    );
+  }
+  
   if (performance.decision !== 'PROMOTE') {
     return {
       applied: false,
