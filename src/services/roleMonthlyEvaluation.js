@@ -132,68 +132,6 @@ function determineDecision({
   };
 }
   
-  /*
-   * ------------------------------------------------------------
-   * PROMOTION
-   * ------------------------------------------------------------
-   *
-   * Si le seuil officiel de promotion est atteint
-   * et qu'un rôle supérieur existe, la promotion est proposée.
-   */
-
-  if (
-    promotionThresholdReached &&
-    promotionTargetRole
-  ) {
-    return {
-      decision: 'PROMOTE',
-      nextRole: promotionTargetRole
-    };
-  }
-
-  /*
-   * ------------------------------------------------------------
-   * MAINTIEN
-   * ------------------------------------------------------------
-   *
-   * Si le quota mensuel est atteint, le membre conserve
-   * son rôle actuel.
-   */
-
-  if (monthlyQuotaReached) {
-    return {
-      decision: 'MAINTAIN',
-      nextRole: null
-    };
-  }
-
-  /*
-   * ------------------------------------------------------------
-   * USER SANS PROMOTION
-   * ------------------------------------------------------------
-   */
-
-  if (normalizedRole === 'user') {
-    return {
-      decision: 'MAINTAIN',
-      nextRole: null
-    };
-  }
-
-  /*
-   * ------------------------------------------------------------
-   * RÔLE SUPÉRIEUR SOUS LE QUOTA
-   * ------------------------------------------------------------
-   *
-   * La rétrogradation n'est pas encore activée.
-   * Nous enregistrons donc PENDING.
-   */
-
-  return {
-    decision: 'PENDING',
-    nextRole: null
-  };
-}
 
 /*
  * ============================================================
