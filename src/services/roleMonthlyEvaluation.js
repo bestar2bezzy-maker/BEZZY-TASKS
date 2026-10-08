@@ -197,12 +197,10 @@ function evaluateUserMonthly(
   }
 
   const role = normalizeRole(user.role);
-
   const evaluation =
     buildRoleEvaluation(
       user.id,
-      role,
-      role === 'user'
+      role
     );
 
   if (!evaluation) {
@@ -212,8 +210,10 @@ function evaluateUserMonthly(
   const decision =
     determineDecision({
       role,
-      quotaReached:
-        evaluation.quotaReached,
+      monthlyQuotaReached:
+        evaluation.monthlyQuotaReached,
+      promotionThresholdReached:
+        evaluation.promotionThresholdReached,
       promotionTargetRole:
         evaluation.promotionTargetRole
     });
