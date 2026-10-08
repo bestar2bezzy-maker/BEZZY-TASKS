@@ -1,0 +1,283 @@
+/*
+ * ============================================================
+ * BEZZY TASKS
+ * V33.7
+ * ÉVALUATION MENSUELLE DES RÔLES
+ * ============================================================
+ *
+ * Ce service prépare et enregistre l'évaluation mensuelle
+ * d'un membre.
+ *
+ * IMPORTANT :
+ * Il ne modifie jamais directement le rôle de l'utilisateur.
+ *
+ * Le changement de rôle sera appliqué au début du mois suivant.
+ *
+ * ============================================================
+ */
+
+const crypto = require('crypto');
+
+const { getDb } = require('../config/database');
+
+const {
+  buildRoleEvaluation
+} = require('./roleProgression');
+
+
+/*
+ * ============================================================
+ * OUTILS
+ * ============================================================
+ */
+
+function getDatabase() {
+  return getDb();
+}
+
+
+/*
+ * ============================================================
+ * NORMALISATION DU RÔLE
+ * ============================================================
+ */
+
+function normalizeRole(role) {
+  return String(role || 'user')
+    .trim()
+    .toLowerCase();
+}
+
+
+/*
+ * ============================================================
+ * RÉCUPÉRER UN UTILISATEUR
+ * ============================================================
+ */
+
+function getUser(userId) {
+  if (!userId) {
+    return null;
+  }
+
+  const db = getDatabase();
+
+  return db.prepare(`
+    SELECT
+      id,
+      role,
+      status,
+      email_verified_at
+    FROM users
+    WHERE id = ?
+    LIMIT 1
+  `).get(userId);
+}
+
+
+/*
+ * ============================================================
+ * DÉTERMINER LA DÉCISION
+ * ============================================================
+ *
+ * IMPORTANT :
+ * Le résultat représente une décision proposée.
+ *
+ * Aucune modification du rôle n'est effectuée ici.
+ *
+ * ============================================================
+ */
+
+function determineDecision({
+  role,
+  quotaReached,
+  promotionTargetRole
+}) {
+  const normalizedRole = normalizeRole(role);
+
+  /*
+   * Un utilisateur normal qui atteint le quota
+   * peut être proposé pour devenir ambassadeur.
+   */
+  if (
+    normalizedRole === 'user' &&
+    quotaReached &&
+    promotionTargetRole
+  ) {
+    return {
+      decision: 'PROMOTE',
+      nextRole: promotionTargetRole
+    };
+  }
+
+  /*
+   * Un membre ayant atteint son quota mensuel
+   * conserve son rôle.
+   */
+  if (quotaReached) {
+    return {
+      decision: 'MAINTAIN',
+      nextRole: null
+    };
+  }
+
+  /*
+   * Un utilisateur normal qui n'a pas atteint son quota
+   * reste simplement USER.
+   */
+  if (normalizedRole === 'user') {
+    return {
+      decision: 'MAINTAIN',
+      nextRole: null
+    };
+  }
+
+  /*
+   * Pour les rôles supérieurs, la rétrogradation sera
+   * appliquée uniquement après validation du moteur complet.
+   *
+   * Pour cette première version, on enregistre l'échec
+   * sans modifier le rôle.
+   */
+  return {
+    decision: 'PENDING',
+    nextRole: null
+  };
+}
+
+
+/*
+ * ============================================================
+ * ÉVALUATION MENSUELLE D'UN UTILISATEUR
+ * ============================================================
+ */
+
+function evaluateUserMonthly(
+  userId,
+  evaluationYear,
+  evaluationMonth
+) {
+  if (!userId) {
+    throw new Error('USER_ID_REQUIRED');
+  }
+
+  const year = Number(evaluationYear);
+  const month = Number(evaluationMonth);
+
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    month < 1 ||
+    month > 12
+  ) {
+    throw new Error('INVALID_EVALUATION_PERIOD');
+  }
+
+  const db = getDatabase();
+
+  const user = getUser(userId);
+
+  if (!user) {
+    throw new Error('USER_NOT_FOUND');
+  }
+
+  const role = normalizeRole(user.role);
+
+  const evaluation =
+    buildRoleEvaluation(
+      user.id,
+      role,
+      role === 'user'
+    );
+
+  if (!evaluation) {
+    throw new Error('ROLE_PROGRESSION_CONFIG_NOT_FOUND');
+  }
+
+  const decision =
+    determineDecision({
+      role,
+      quotaReached:
+        evaluation.quotaReached,
+      promotionTargetRole:
+        evaluation.promotionTargetRole
+    });
+
+  const performanceId =
+    crypto.randomUUID();
+
+  const now =
+    new Date().toISOString();
+
+  db.prepare(`
+    INSERT OR REPLACE INTO role_monthly_performance (
+      id,
+      user_id,
+      role_at_evaluation,
+      evaluation_year,
+      evaluation_month,
+      active_referred_users,
+      required_active_users,
+      bezzy_score,
+      quota_reached,
+      anti_fraud_passed,
+      decision,
+      next_role,
+      evaluated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    performanceId,
+    user.id,
+    role,
+    year,
+    month,
+    evaluation.activeReferredUsers,
+    evaluation.requiredActiveUsers,
+    0,
+    evaluation.quotaReached ? 1 : 0,
+    1,
+    decision.decision,
+    decision.nextRole,
+    now
+  );
+
+  return {
+    id: performanceId,
+
+    userId: user.id,
+
+    roleAtEvaluation: role,
+
+    evaluationYear: year,
+
+    evaluationMonth: month,
+
+    activeReferredUsers:
+      evaluation.activeReferredUsers,
+
+    requiredActiveUsers:
+      evaluation.requiredActiveUsers,
+
+    quotaReached:
+      evaluation.quotaReached,
+
+    decision:
+      decision.decision,
+
+    nextRole:
+      decision.nextRole
+  };
+}
+
+
+/*
+ * ============================================================
+ * EXPORTS
+ * ============================================================
+ */
+
+module.exports = {
+  evaluateUserMonthly,
+  determineDecision
+};
