@@ -271,12 +271,14 @@ function evaluateUserMonthly(
     activeReferredUsers:
       evaluation.activeReferredUsers,
 
-    requiredActiveUsers:
-      evaluation.requiredActiveUsers,
+    monthlyRequiredUsers:
+  evaluation.monthlyRequiredUsers,
 
-    quotaReached:
-      evaluation.quotaReached,
+monthlyQuotaReached:
+  evaluation.monthlyQuotaReached,
 
+promotionThresholdReached:
+  evaluation.promotionThresholdReached,
     decision:
       decision.decision,
 
