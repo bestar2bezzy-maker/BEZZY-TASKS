@@ -3568,11 +3568,15 @@ try {
   const adminRouter = require('./admin');
 
   router.use(
-    '/admin',
-    requireAuth,
-    requireRole('admin', 'moderator'),
-    adminRouter
-  );
+  '/admin',
+  requireAuth,
+  requireRole(
+    'super_admin',
+    'admin',
+    'moderator'
+  ),
+  adminRouter
+);
 
 } catch (error) {
 
