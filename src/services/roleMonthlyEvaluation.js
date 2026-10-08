@@ -80,28 +80,35 @@ function getUser(userId) {
  * DÉTERMINER LA DÉCISION
  * ============================================================
  *
- * IMPORTANT :
- * Le résultat représente une décision proposée.
+ * La décision distingue :
  *
- * Aucune modification du rôle n'est effectuée ici.
+ * - le maintien mensuel ;
+ * - la promotion ;
+ * - l'absence de décision de rétrogradation.
  *
  * ============================================================
  */
 
 function determineDecision({
   role,
-  quotaReached,
+  monthlyQuotaReached,
+  promotionThresholdReached,
   promotionTargetRole
 }) {
-  const normalizedRole = normalizeRole(role);
+  const normalizedRole =
+    normalizeRole(role);
 
   /*
-   * Un utilisateur normal qui atteint le quota
-   * peut être proposé pour devenir ambassadeur.
+   * ------------------------------------------------------------
+   * PROMOTION
+   * ------------------------------------------------------------
+   *
+   * Si le seuil officiel de promotion est atteint
+   * et qu'un rôle supérieur existe, la promotion est proposée.
    */
+
   if (
-    normalizedRole === 'user' &&
-    quotaReached &&
+    promotionThresholdReached &&
     promotionTargetRole
   ) {
     return {
@@ -111,10 +118,15 @@ function determineDecision({
   }
 
   /*
-   * Un membre ayant atteint son quota mensuel
-   * conserve son rôle.
+   * ------------------------------------------------------------
+   * MAINTIEN
+   * ------------------------------------------------------------
+   *
+   * Si le quota mensuel est atteint, le membre conserve
+   * son rôle actuel.
    */
-  if (quotaReached) {
+
+  if (monthlyQuotaReached) {
     return {
       decision: 'MAINTAIN',
       nextRole: null
@@ -122,9 +134,11 @@ function determineDecision({
   }
 
   /*
-   * Un utilisateur normal qui n'a pas atteint son quota
-   * reste simplement USER.
+   * ------------------------------------------------------------
+   * USER SANS PROMOTION
+   * ------------------------------------------------------------
    */
+
   if (normalizedRole === 'user') {
     return {
       decision: 'MAINTAIN',
@@ -133,18 +147,19 @@ function determineDecision({
   }
 
   /*
-   * Pour les rôles supérieurs, la rétrogradation sera
-   * appliquée uniquement après validation du moteur complet.
+   * ------------------------------------------------------------
+   * RÔLE SUPÉRIEUR SOUS LE QUOTA
+   * ------------------------------------------------------------
    *
-   * Pour cette première version, on enregistre l'échec
-   * sans modifier le rôle.
+   * La rétrogradation n'est pas encore activée.
+   * Nous enregistrons donc PENDING.
    */
+
   return {
     decision: 'PENDING',
     nextRole: null
   };
 }
-
 
 /*
  * ============================================================
