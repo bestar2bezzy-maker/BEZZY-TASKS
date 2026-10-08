@@ -1664,6 +1664,7 @@ fullName ? String(fullName).trim() : null,
 ownReferralCode,
 normalizedReferralCode,
 referralUserId
+      );
 
     /*
      * ========================================================
