@@ -321,4 +321,7 @@ function applyMonthlyRoleTransitions(
 
 module.exports = {
   isValidRoleTransition,
+  applyRoleTransition,
+  applyMonthlyRoleTransitions
+};
  
