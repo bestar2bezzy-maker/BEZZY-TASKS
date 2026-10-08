@@ -99,6 +99,16 @@ function applyRoleTransition(performanceId) {
     throw new Error('PERFORMANCE_NOT_FOUND');
   }
 
+if (performance.applied_at) {
+  return {
+    applied: false,
+    reason: 'ROLE_TRANSITION_ALREADY_APPLIED',
+    performanceId: performance.id,
+    userId: performance.user_id,
+    appliedAt: performance.applied_at
+  };
+}
+  
   /*
    * Seules les décisions PROMOTE sont appliquées
    * par cette première version.
