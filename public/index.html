@@ -1782,6 +1782,48 @@ header{
 
   </div>
 
+  
+<nav class="bottom-nav" id="bottomNav" aria-label="Navigation principale">
+
+  <button type="button"
+          class="active"
+          data-bottom-nav="home"
+          onclick="window.scrollTo({top:0,behavior:'smooth'})">
+    <span class="nav-icon">🏠</span>
+    <span>Accueil</span>
+  </button>
+
+  <button type="button"
+          data-bottom-nav="earn"
+          onclick="document.querySelector('[data-tab=&quot;offers&quot;]').click(); document.getElementById('offersPane').scrollIntoView({behavior:'smooth'})">
+    <span class="nav-icon">🎯</span>
+    <span>Gagner</span>
+  </button>
+
+  <button type="button"
+          data-bottom-nav="top"
+          onclick="toast('Le classement sera disponible après son intégration.')">
+    <span class="nav-icon">🏆</span>
+    <span>Top</span>
+  </button>
+
+  <button type="button"
+          data-bottom-nav="invite"
+          onclick="document.getElementById('referralCard').scrollIntoView({behavior:'smooth'})">
+    <span class="nav-icon">🎁</span>
+    <span>Inviter</span>
+  </button>
+
+  <button type="button"
+          data-bottom-nav="withdraw"
+          onclick="document.querySelector('[data-tab=&quot;withdraw&quot;]').click(); document.getElementById('withdrawPane').scrollIntoView({behavior:'smooth'})">
+    <span class="nav-icon">💸</span>
+    <span>Retrait</span>
+  </button>
+
+</nav>
+  
+
           </section>
 </main>
 
