@@ -182,7 +182,8 @@ function getProgressionRequirements(role) {
   demotionTargetRole:
     config.demotion_target_role || null
 };
-
+}
+  
 /*
  * ============================================================
  * PRÉPARER L'ÉVALUATION D'UN MEMBRE
