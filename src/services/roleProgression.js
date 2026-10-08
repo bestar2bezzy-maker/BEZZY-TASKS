@@ -139,12 +139,13 @@ function getRoleProgressionConfig(role) {
 
   return db.prepare(`
     SELECT
-      role,
-      initial_required_users,
-      monthly_required_users,
-      promotion_required_users,
-      promotion_target_role,
-      is_active
+  role,
+  initial_required_users,
+  monthly_required_users,
+  promotion_required_users,
+  promotion_target_role,
+  demotion_target_role,
+  is_active
     FROM role_progression_config
     WHERE role = ?
       AND is_active = 1
@@ -167,18 +168,20 @@ function getProgressionRequirements(role) {
   }
 
   return {
-    role: config.role,
+  role: config.role,
 
-    monthlyRequiredUsers:
-      Number(config.monthly_required_users || 0),
+  monthlyRequiredUsers:
+    Number(config.monthly_required_users || 0),
 
-    promotionRequiredUsers:
-      Number(config.promotion_required_users || 0),
+  promotionRequiredUsers:
+    Number(config.promotion_required_users || 0),
 
-    promotionTargetRole:
-      config.promotion_target_role || null
-  };
-}
+  promotionTargetRole:
+    config.promotion_target_role || null,
+
+  demotionTargetRole:
+    config.demotion_target_role || null
+};
 
 /*
  * ============================================================
