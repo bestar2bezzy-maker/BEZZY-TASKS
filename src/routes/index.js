@@ -1583,7 +1583,7 @@ router.post('/auth/register', async (req, res, next) => {
       });
     }
 
-    /*
+  /*
  * ========================================================
  * VALIDATION DU CODE DE PARRAINAGE
  * ========================================================
@@ -1593,6 +1593,8 @@ const normalizedReferralCode =
   referralCode
     ? String(referralCode).trim()
     : null;
+
+let referralUserId = null;
 
 if (normalizedReferralCode) {
   const referralUser = db.prepare(`
@@ -1608,6 +1610,8 @@ if (normalizedReferralCode) {
       message: 'Code de parrainage invalide'
     });
   }
+
+  referralUserId = referralUser.id;
 }
 
 
@@ -1638,17 +1642,18 @@ if (normalizedReferralCode) {
     .toUpperCase();
 
     db.prepare(`
-  INSERT INTO users (
+INSERT INTO users (
   id,
-email,
-phone,
-country_code,
-password_hash,
-full_name,
-referral_code,
-referred_by_code
+  email,
+  phone,
+  country_code,
+  password_hash,
+  full_name,
+  referral_code,
+  referred_by_code,
+  referred_by_user_id
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 `).run(
     userId,
 normalizedEmail,
@@ -1657,8 +1662,8 @@ countryCode,
 passwordHash,
 fullName ? String(fullName).trim() : null,
 ownReferralCode,
-normalizedReferralCode
-);
+normalizedReferralCode,
+referralUserId
 
     /*
      * ========================================================
