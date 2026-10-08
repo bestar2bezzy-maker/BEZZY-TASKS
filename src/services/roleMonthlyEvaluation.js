@@ -93,11 +93,45 @@ function determineDecision({
   role,
   monthlyQuotaReached,
   promotionThresholdReached,
-  promotionTargetRole
+  promotionTargetRole,
+  demotionTargetRole
 }) {
   const normalizedRole =
     normalizeRole(role);
 
+  if (
+    promotionThresholdReached &&
+    promotionTargetRole
+  ) {
+    return {
+      decision: 'PROMOTE',
+      nextRole: promotionTargetRole
+    };
+  }
+
+  if (monthlyQuotaReached) {
+    return {
+      decision: 'MAINTAIN',
+      nextRole: null
+    };
+  }
+
+  if (
+    demotionTargetRole &&
+    normalizedRole !== 'user'
+  ) {
+    return {
+      decision: 'DEMOTE',
+      nextRole: demotionTargetRole
+    };
+  }
+
+  return {
+    decision: 'MAINTAIN',
+    nextRole: null
+  };
+}
+  
   /*
    * ------------------------------------------------------------
    * PROMOTION
