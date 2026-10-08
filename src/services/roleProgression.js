@@ -236,8 +236,11 @@ function buildRoleEvaluation(userId, role) {
 
     promotionThresholdReached,
 
-    promotionTargetRole:
-      requirements.promotionTargetRole
+        promotionTargetRole:
+      requirements.promotionTargetRole,
+
+    demotionTargetRole:
+      requirements.demotionTargetRole
   };
     }
 
