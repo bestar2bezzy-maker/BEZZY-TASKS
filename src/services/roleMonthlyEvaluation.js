@@ -180,16 +180,21 @@ function evaluateUserMonthly(
   }
 
   const decision =
-    determineDecision({
-      role,
-      monthlyQuotaReached:
-        evaluation.monthlyQuotaReached,
-      promotionThresholdReached:
-        evaluation.promotionThresholdReached,
-      promotionTargetRole:
-        evaluation.promotionTargetRole
-    });
+  determineDecision({
+    role,
 
+    monthlyQuotaReached:
+      evaluation.monthlyQuotaReached,
+
+    promotionThresholdReached:
+      evaluation.promotionThresholdReached,
+
+    promotionTargetRole:
+      evaluation.promotionTargetRole,
+
+    demotionTargetRole:
+      evaluation.demotionTargetRole
+  });
   const performanceId =
     crypto.randomUUID();
 
