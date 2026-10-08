@@ -233,6 +233,18 @@ if (performance.applied_at) {
     currentRole
   );
 
+if (result.changes === 1) {
+  db.prepare(`
+    UPDATE role_monthly_performance
+    SET applied_at = ?
+    WHERE id = ?
+      AND applied_at IS NULL
+  `).run(
+    new Date().toISOString(),
+    performance.id
+  );
+}
+  
   if (result.changes !== 1) {
     return {
       applied: false,
