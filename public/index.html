@@ -1787,8 +1787,8 @@ header{
 
   <button type="button"
           class="active"
-          data-bottom-nav="home"
-          onclick="window.scrollTo({top:0,behavior:'smooth'})">
+          data-bottom-nav="home"          
+    onclick="document.querySelector('[data-tab=&quot;offers&quot;]').click(); window.scrollTo({top:0,behavior:'smooth'})">
     <span class="nav-icon">🏠</span>
     <span>Accueil</span>
   </button>
@@ -3873,6 +3873,27 @@ document
 
   });
 
+/* ============================================================
+   BEZZY TASKS — ÉTAT ACTIF DE LA NAVIGATION DU BAS
+   ============================================================ */
+
+document
+  .querySelectorAll("#bottomNav [data-bottom-nav]")
+  .forEach(button => {
+
+    button.addEventListener("click", () => {
+
+      document
+        .querySelectorAll("#bottomNav [data-bottom-nav]")
+        .forEach(item => {
+          item.classList.remove("active");
+        });
+
+      button.classList.add("active");
+
+    });
+
+  });
 
 /* ============================================================
    HISTORIQUE
