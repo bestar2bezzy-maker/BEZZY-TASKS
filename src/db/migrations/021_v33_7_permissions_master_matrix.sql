@@ -85,3 +85,180 @@ VALUES
 ('system.manage_roles', 'Gérer la configuration des rôles', 1),
 ('system.manage_anti_fraud', 'Gérer le système anti-fraude', 1),
 ('system.view_audit_logs', 'Consulter les journaux d audit', 1);
+ 
+/*
+ * ============================================================
+ * ATTRIBUTION DES PERMISSIONS PAR RÔLE
+ * ============================================================
+ */
+
+INSERT OR IGNORE INTO role_permissions
+(role, permission, scope)
+VALUES
+
+/* ============================================================
+ * USER
+ * ============================================================
+ */
+
+('user', 'users.view_self', 'self'),
+('user', 'tasks.view', 'global'),
+('user', 'finance.view_self', 'self'),
+('user', 'analytics.self', 'self'),
+
+/* ============================================================
+ * AMBASSADEUR
+ * ============================================================
+ */
+
+('ambassadeur', 'users.view_self', 'self'),
+('ambassadeur', 'tasks.view', 'global'),
+('ambassadeur', 'finance.view_self', 'self'),
+('ambassadeur', 'analytics.self', 'self'),
+('ambassadeur', 'analytics.team', 'referral_network'),
+('ambassadeur', 'roles.view', 'self'),
+('ambassadeur', 'roles.view_progression', 'self'),
+
+/* ============================================================
+ * MODÉRATEUR
+ * ============================================================
+ */
+
+('moderateur', 'users.view_self', 'self'),
+('moderateur', 'users.view_all', 'moderation_scope'),
+('moderateur', 'users.view_sensitive', 'moderation_scope'),
+('moderateur', 'users.suspend', 'moderation_scope'),
+('moderateur', 'users.unsuspend', 'own_actions'),
+('moderateur', 'users.ban', 'moderation_scope'),
+
+('moderateur', 'tasks.view', 'global'),
+('moderateur', 'tasks.pause', 'moderation_scope'),
+
+('moderateur', 'finance.view_self', 'self'),
+('moderateur', 'finance.view_transactions', 'investigation_scope'),
+('moderateur', 'finance.manage_withdrawals', 'review_only'),
+
+('moderateur', 'moderation.view_reports', 'moderation_scope'),
+('moderateur', 'moderation.handle_reports', 'moderation_scope'),
+('moderateur', 'moderation.warn', 'moderation_scope'),
+('moderateur', 'moderation.suspend', 'moderation_scope'),
+('moderateur', 'moderation.ban', 'moderation_scope'),
+
+('moderateur', 'analytics.self', 'self'),
+('moderateur', 'analytics.team', 'moderation_scope'),
+('moderateur', 'analytics.global', 'limited'),
+('moderateur', 'analytics.role_performance', 'moderation_scope'),
+
+('moderateur', 'roles.view', 'moderation_scope'),
+('moderateur', 'roles.view_progression', 'moderation_scope'),
+('moderateur', 'roles.manage_ambassadors', 'moderation_scope'),
+
+('moderateur', 'system.manage_anti_fraud', 'review_only'),
+('moderateur', 'system.view_audit_logs', 'moderation_scope'),
+
+/* ============================================================
+ * ADMINISTRATEUR
+ * ============================================================
+ */
+
+('administrateur', 'users.view_self', 'self'),
+('administrateur', 'users.view_all', 'global'),
+('administrateur', 'users.view_sensitive', 'global'),
+('administrateur', 'users.suspend', 'global'),
+('administrateur', 'users.unsuspend', 'global'),
+('administrateur', 'users.ban', 'global'),
+('administrateur', 'users.unban', 'global'),
+
+('administrateur', 'tasks.view', 'global'),
+('administrateur', 'tasks.create', 'global'),
+('administrateur', 'tasks.edit_own', 'global'),
+('administrateur', 'tasks.edit_all', 'global'),
+('administrateur', 'tasks.pause', 'global'),
+('administrateur', 'tasks.delete', 'global'),
+('administrateur', 'tasks.approve', 'global'),
+
+('administrateur', 'finance.view_self', 'self'),
+('administrateur', 'finance.view_all', 'global'),
+('administrateur', 'finance.view_profit', 'global'),
+('administrateur', 'finance.view_transactions', 'global'),
+('administrateur', 'finance.manage_withdrawals', 'global'),
+('administrateur', 'finance.approve_withdrawal', 'global'),
+('administrateur', 'finance.refund', 'controlled'),
+
+('administrateur', 'moderation.view_reports', 'global'),
+('administrateur', 'moderation.handle_reports', 'global'),
+('administrateur', 'moderation.warn', 'global'),
+('administrateur', 'moderation.suspend', 'global'),
+('administrateur', 'moderation.ban', 'global'),
+('administrateur', 'moderation.reverse_action', 'controlled'),
+
+('administrateur', 'analytics.self', 'self'),
+('administrateur', 'analytics.team', 'global'),
+('administrateur', 'analytics.global', 'global'),
+('administrateur', 'analytics.financial', 'global'),
+('administrateur', 'analytics.role_performance', 'global'),
+
+('administrateur', 'roles.view', 'global'),
+('administrateur', 'roles.view_progression', 'global'),
+('administrateur', 'roles.manage_ambassadors', 'global'),
+('administrateur', 'roles.manage_moderators', 'global'),
+
+('administrateur', 'system.view_config', 'global'),
+('administrateur', 'system.modify_config', 'operational_only'),
+('administrateur', 'system.manage_anti_fraud', 'global'),
+('administrateur', 'system.view_audit_logs', 'global'),
+
+/* ============================================================
+ * ELITE
+ * ============================================================
+ */
+
+('elite', 'users.view_self', 'self'),
+('elite', 'users.view_all', 'global'),
+('elite', 'users.view_sensitive', 'global'),
+('elite', 'users.suspend', 'global'),
+('elite', 'users.unsuspend', 'global'),
+('elite', 'users.ban', 'global'),
+('elite', 'users.unban', 'global'),
+
+('elite', 'tasks.view', 'global'),
+('elite', 'tasks.create', 'global'),
+('elite', 'tasks.edit_own', 'global'),
+('elite', 'tasks.edit_all', 'global'),
+('elite', 'tasks.pause', 'global'),
+('elite', 'tasks.delete', 'global'),
+('elite', 'tasks.approve', 'global'),
+
+('elite', 'finance.view_self', 'self'),
+('elite', 'finance.view_all', 'global'),
+('elite', 'finance.view_profit', 'global'),
+('elite', 'finance.view_transactions', 'global'),
+('elite', 'finance.manage_withdrawals', 'global'),
+('elite', 'finance.approve_withdrawal', 'global'),
+('elite', 'finance.refund', 'controlled'),
+
+('elite', 'moderation.view_reports', 'global'),
+('elite', 'moderation.handle_reports', 'global'),
+('elite', 'moderation.warn', 'global'),
+('elite', 'moderation.suspend', 'global'),
+('elite', 'moderation.ban', 'global'),
+('elite', 'moderation.reverse_action', 'global'),
+
+('elite', 'analytics.self', 'self'),
+('elite', 'analytics.team', 'global'),
+('elite', 'analytics.global', 'global'),
+('elite', 'analytics.financial', 'global'),
+('elite', 'analytics.role_performance', 'global'),
+
+('elite', 'roles.view', 'global'),
+('elite', 'roles.view_progression', 'global'),
+('elite', 'roles.manage_ambassadors', 'global'),
+('elite', 'roles.manage_moderators', 'global'),
+('elite', 'roles.manage_admins', 'global'),
+('elite', 'roles.modify_rules', 'global'),
+
+('elite', 'system.view_config', 'global'),
+('elite', 'system.modify_config', 'global'),
+('elite', 'system.manage_roles', 'global'),
+('elite', 'system.manage_anti_fraud', 'global'),
+('elite', 'system.view_audit_logs', 'global');
