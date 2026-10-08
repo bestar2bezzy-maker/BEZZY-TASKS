@@ -180,50 +180,62 @@ function getProgressionRequirements(role) {
   };
 }
 
- 
 /*
  * ============================================================
  * PRÉPARER L'ÉVALUATION D'UN MEMBRE
  * ============================================================
  */
 
-function buildRoleEvaluation(userId, role, isInitialEvaluation = false) {
+function buildRoleEvaluation(userId, role) {
   if (!userId || !role) {
     return null;
   }
+
+  const normalizedRole =
+    String(role).toLowerCase();
 
   const activeReferredUsers =
     countActiveReferredUsers(userId);
 
   const requirements =
     getProgressionRequirements(
-      role,
-      isInitialEvaluation
+      normalizedRole
     );
 
   if (!requirements) {
     return null;
   }
 
-  const quotaReached =
-    activeReferredUsers >= requirements.requiredUsers;
+  const monthlyQuotaReached =
+    activeReferredUsers >=
+    requirements.monthlyRequiredUsers;
+
+  const promotionThresholdReached =
+    requirements.promotionRequiredUsers > 0 &&
+    activeReferredUsers >=
+    requirements.promotionRequiredUsers;
 
   return {
     userId,
 
-    role: String(role).toLowerCase(),
+    role: normalizedRole,
 
     activeReferredUsers,
 
-    requiredActiveUsers:
-      requirements.requiredUsers,
+    monthlyRequiredUsers:
+      requirements.monthlyRequiredUsers,
 
-    quotaReached,
+    promotionRequiredUsers:
+      requirements.promotionRequiredUsers,
+
+    monthlyQuotaReached,
+
+    promotionThresholdReached,
 
     promotionTargetRole:
       requirements.promotionTargetRole
   };
-}
+    }
 
 
 /*
