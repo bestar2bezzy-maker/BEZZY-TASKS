@@ -19,6 +19,9 @@ const {
   applyMonthlyRoleTransitions
 } = require('./roleTransition');
 
+const {
+  runMonthlyRoleEvaluation
+} = require('./roleMonthlyRunner');
 
 /*
  * ============================================================
@@ -100,12 +103,17 @@ function runMonthlyOpening(date = new Date()) {
       currentMonth
     );
 
-  const transitionResult =
-    applyMonthlyRoleTransitions(
-      previousPeriod.year,
-      previousPeriod.month
-    );
+  const evaluationResult =
+  runMonthlyRoleEvaluation(
+    previousPeriod.year,
+    previousPeriod.month
+  );
 
+const transitionResult =
+  applyMonthlyRoleTransitions(
+    previousPeriod.year,
+    previousPeriod.month
+  );
   return {
     success: true,
 
