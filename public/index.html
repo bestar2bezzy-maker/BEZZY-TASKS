@@ -751,9 +751,17 @@ inset 0 1px 0 rgba(255, 255, 255, 0.10);
 }
 
 .bottom-nav button.active {
-  color: var(--gold);
-  background: #10291c;
-  border-color: var(--line);
+  color: #ffe7a0;
+  background: linear-gradient(
+    145deg,
+    rgba(212, 175, 55, 0.20),
+    rgba(16, 41, 28, 0.55)
+  );
+  border-color: rgba(255, 215, 120, 0.48);
+  box-shadow:
+    0 0 12px rgba(212, 175, 55, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.10);
+  text-shadow: 0 0 8px rgba(255, 215, 120, 0.28);
 }
 
 .bottom-nav button:focus-visible {
