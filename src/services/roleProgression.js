@@ -124,7 +124,6 @@ function countActiveReferredUsers(userId) {
   return Number(result?.total || 0);
 }
 
-
 /*
  * ============================================================
  * LECTURE DE LA CONFIGURATION D'UN RÔLE
@@ -143,6 +142,7 @@ function getRoleProgressionConfig(role) {
       role,
       initial_required_users,
       monthly_required_users,
+      promotion_required_users,
       promotion_target_role,
       is_active
     FROM role_progression_config
@@ -159,7 +159,7 @@ function getRoleProgressionConfig(role) {
  * ============================================================
  */
 
-function getProgressionRequirements(role, isInitialEvaluation = false) {
+function getProgressionRequirements(role) {
   const config = getRoleProgressionConfig(role);
 
   if (!config) {
@@ -169,16 +169,18 @@ function getProgressionRequirements(role, isInitialEvaluation = false) {
   return {
     role: config.role,
 
-    requiredUsers: isInitialEvaluation
-      ? Number(config.initial_required_users || 0)
-      : Number(config.monthly_required_users || 0),
+    monthlyRequiredUsers:
+      Number(config.monthly_required_users || 0),
+
+    promotionRequiredUsers:
+      Number(config.promotion_required_users || 0),
 
     promotionTargetRole:
       config.promotion_target_role || null
   };
 }
 
-
+ 
 /*
  * ============================================================
  * PRÉPARER L'ÉVALUATION D'UN MEMBRE
