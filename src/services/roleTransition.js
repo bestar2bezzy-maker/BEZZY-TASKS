@@ -88,7 +88,8 @@ function applyRoleTransition(performanceId) {
       evaluation_year,
       evaluation_month,
       decision,
-      next_role
+      next_role,
+      applied_at
     FROM role_monthly_performance
     WHERE id = ?
     LIMIT 1
