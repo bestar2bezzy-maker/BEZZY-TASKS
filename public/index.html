@@ -3327,14 +3327,23 @@ function renderOffers(rows) {
           🔎
         </div>
 
+        
         <strong>
-          Aucune mission trouvée
+          ${
+            bezzyTasksCache.length === 0
+              ? "Aucune mission disponible pour le moment"
+              : "Aucune mission trouvée"
+          }
         </strong>
 
         <p class="muted small">
-          Essayez une autre recherche
-          ou modifiez vos filtres.
+          ${
+            bezzyTasksCache.length === 0
+              ? "De nouvelles opportunités arrivent bientôt ! Revenez consulter cette page."
+              : "Essayez une autre recherche ou modifiez vos filtres."
+          }
         </p>
+      
 
       </div>
 
