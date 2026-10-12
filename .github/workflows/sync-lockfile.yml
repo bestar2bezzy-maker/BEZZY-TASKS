@@ -1,0 +1,41 @@
+
+name: Synchroniser les dependances PostgreSQL
+
+on:
+  push:
+    branches:
+      - migration/neon-postgres
+
+permissions:
+  contents: write
+
+jobs:
+  sync-lockfile:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Recuperer le depot
+        uses: actions/checkout@v4
+        with:
+          ref: migration/neon-postgres
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Synchroniser package-lock.json
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Enregistrer le verrouillage corrige
+        run: |
+          if git diff --quiet -- package-lock.json; then
+            echo "Aucune modification necessaire."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "chore: sync PostgreSQL dependency lockfile"
+          git push origin HEAD:migration/neon-postgres
+          
