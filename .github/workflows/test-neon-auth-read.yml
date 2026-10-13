@@ -3,6 +3,11 @@ name: Test Neon auth connection
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/test-neon-auth-read.yml'
 
 permissions:
   contents: read
