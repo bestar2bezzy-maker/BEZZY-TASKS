@@ -1,0 +1,33 @@
+
+name: Test Neon auth connection
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-neon-auth-read:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout migration branch
+        uses: actions/checkout@v4
+        with:
+          ref: migration/neon-postgres
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --omit=dev
+
+      - name: Run read-only Neon diagnostic
+        run: node scripts/test-neon-auth-read.js
+        env:
+          DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+          
