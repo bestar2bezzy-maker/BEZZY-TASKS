@@ -3183,7 +3183,7 @@ router.get('/auth/google/callback', async (req, res, next) => {
     }
 
 
-    const db = getDb();
+        const pool = getPostgresPool();
 
 
     /*
@@ -3192,12 +3192,17 @@ router.get('/auth/google/callback', async (req, res, next) => {
      * ========================================================
      */
 
-    let user = db.prepare(`
-      SELECT *
-      FROM users
-      WHERE google_sub = ?
-      LIMIT 1
-    `).get(googleSub);
+    const googleUserResult = await pool.query(
+      `
+        SELECT *
+        FROM users
+        WHERE google_sub = $1
+        LIMIT 1
+      `,
+      [googleSub]
+    );
+
+    let user = googleUserResult.rows[0] || null;
 
 
     /*
