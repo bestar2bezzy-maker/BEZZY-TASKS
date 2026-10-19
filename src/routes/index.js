@@ -2395,7 +2395,7 @@ router.post('/auth/login', async (req, res, next) => {
       });
     }
 
-    const db = getDb();
+        const pool = getPostgresPool();
 
     const normalizedEmail =
       normalizeEmail(normalizedIdentifier);
@@ -2407,53 +2407,55 @@ router.post('/auth/login', async (req, res, next) => {
 
     /*
      * Si l'identifiant ressemble à un e-mail,
-     * recherche par e-mail.
+     * recherche dans Neon PostgreSQL.
      */
     if (
       normalizedEmail &&
       isValidEmail(normalizedEmail)
     ) {
+      const userResult = await pool.query(
+        `
+          SELECT *
+          FROM users
+          WHERE LOWER(email) = LOWER($1)
+          LIMIT 1
+        `,
+        [normalizedEmail]
+      );
 
-      user = db.prepare(`
-        SELECT *
-        FROM users
-        WHERE LOWER(email) = LOWER(?)
-        LIMIT 1
-      `).get(normalizedEmail);
+      user = userResult.rows[0] || null;
 
     } else {
-
       /*
-       * Sinon recherche par téléphone.
-       *
-       * On compare :
-       *
-       * - numéro national
-       * - numéro international
-       *
-       * Aucun chiffre n'est retiré.
+       * Sinon, recherche par téléphone.
+       * On conserve la compatibilité entre le
+       * numéro national et le numéro international.
        */
-
       const countryCode =
-  String(country_code || 'CG').trim().toUpperCase();
+        String(country_code || 'CG').trim().toUpperCase();
 
-const internationalPhone =
-  buildInternationalPhone(
-    normalizedPhone,
-    countryCode
-  );
+      const internationalPhone =
+        buildInternationalPhone(
+          normalizedPhone,
+          countryCode
+        );
 
-user = db.prepare(`
-  SELECT *
-  FROM users
-  WHERE phone = ?
-     OR phone = ?
-  LIMIT 1
-`).get(
-  normalizedPhone,
-  internationalPhone
-);
-    }
+      const userResult = await pool.query(
+        `
+          SELECT *
+          FROM users
+          WHERE phone = $1
+             OR phone = $2
+          LIMIT 1
+        `,
+        [
+          normalizedPhone,
+          internationalPhone
+        ]
+      );
+
+      user = userResult.rows[0] || null;
+  }
 
     /*
      * Identifiants incorrects.
@@ -2562,35 +2564,39 @@ if (!passwordOk) {
      * Supprimer les anciens refresh tokens
      * expirés ou révoqués de cet utilisateur.
      */
-
-    db.prepare(`
-      DELETE FROM refresh_tokens
-      WHERE user_id = ?
-        AND (
-          revoked_at IS NOT NULL
-          OR expires_at <= ?
-        )
-    `).run(
-      user.id,
-      new Date().toISOString()
+    await pool.query(
+      `
+        DELETE FROM refresh_tokens
+        WHERE user_id = $1
+          AND (
+            revoked_at IS NOT NULL
+            OR expires_at <= $2
+          )
+      `,
+      [
+        user.id,
+        new Date().toISOString()
+      ]
     );
 
-
     /*
-     * Enregistrer uniquement le hash.
+     * Enregistrer uniquement le hash
+     * du refresh token dans Neon.
      */
-
-    db.prepare(`
-      INSERT INTO refresh_tokens (
-        user_id,
-        token_hash,
-        expires_at
-      )
-      VALUES (?, ?, ?)
-    `).run(
-      user.id,
-      refreshTokenHash,
-      refreshExpiresAt
+    await pool.query(
+      `
+        INSERT INTO refresh_tokens (
+          user_id,
+          token_hash,
+          expires_at
+        )
+        VALUES ($1, $2, $3)
+      `,
+      [
+        user.id,
+        refreshTokenHash,
+        refreshExpiresAt
+      ]
     );
 
 
