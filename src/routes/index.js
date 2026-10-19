@@ -839,11 +839,7 @@ router.get('/countries', (req, res) => {
 
 router.post('/auth/forgot-password', async (req, res, next) => {
   try {
-
-    const {
-      email
-    } = req.body || {};
-
+    const { email } = req.body || {};
     const normalizedEmail = normalizeEmail(email);
 
     if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
@@ -853,50 +849,46 @@ router.post('/auth/forgot-password', async (req, res, next) => {
       });
     }
 
-    const db = getDb();
+    const pool = getPostgresPool();
 
-    const user = db.prepare(`
-      SELECT
-        id,
-        email,
-        email_verified_at
-      FROM users
-      WHERE LOWER(email) = LOWER(?)
-      LIMIT 1
-    `).get(normalizedEmail);
-console.log(
-  'PASSWORD_RESET_DEBUG:',
-  JSON.stringify({
-    email: normalizedEmail,
-    userFound: !!user,
-    userId: user ? user.id : null,
-    emailVerified: user ? !!user.email_verified_at : null
-  })
-);
+    const userResult = await pool.query(
+      `
+        SELECT
+          id,
+          email,
+          email_verified_at
+        FROM users
+        WHERE LOWER(email) = LOWER($1)
+        LIMIT 1
+      `,
+      [normalizedEmail]
+    );
+
+    const user = userResult.rows[0] || null;
 
     /*
-     * Réponse volontairement identique si l'adresse
-     * n'existe pas afin d'éviter la divulgation
-     * de comptes existants.
+     * Réponse identique si l'adresse n'existe pas,
+     * pour éviter de révéler les comptes enregistrés.
      */
     if (!user) {
-  return res.status(200).json({
-    success: true,
-    message:
-      'Si cette adresse est associée à un compte, un e-mail de réinitialisation sera envoyé.'
-  });
+      return res.status(200).json({
+        success: true,
+        message:
+          'Si cette adresse est associée à un compte, un e-mail de réinitialisation sera envoyé.'
+      });
     }
-
 
     /*
      * Supprimer les anciens tokens non utilisés.
      */
-    db.prepare(`
-      DELETE FROM password_reset_tokens
-      WHERE user_id = ?
-        AND used_at IS NULL
-    `).run(user.id);
-
+    await pool.query(
+      `
+        DELETE FROM password_reset_tokens
+        WHERE user_id = $1
+          AND used_at IS NULL
+      `,
+      [user.id]
+    );
 
     /*
      * Générer un token cryptographiquement aléatoire.
@@ -905,82 +897,72 @@ console.log(
       .randomBytes(32)
       .toString('hex');
 
-
     /*
-     * Ne jamais stocker le token brut.
+     * Ne stocker que le hash du token.
      */
     const tokenHash = crypto
       .createHash('sha256')
       .update(rawToken)
       .digest('hex');
 
-
     /*
-     * Validité :
-     * 30 minutes.
+     * Validité : 30 minutes.
      */
     const expiresAt = new Date(
       Date.now() + 30 * 60 * 1000
     ).toISOString();
 
-
-    db.prepare(`
-      INSERT INTO password_reset_tokens (
-        user_id,
-        token_hash,
-        expires_at
-      )
-      VALUES (?, ?, ?)
-    `).run(
-      user.id,
-      tokenHash,
-      expiresAt
+    await pool.query(
+      `
+        INSERT INTO password_reset_tokens (
+          user_id,
+          token_hash,
+          expires_at
+        )
+        VALUES ($1, $2, $3)
+      `,
+      [
+        user.id,
+        tokenHash,
+        expiresAt
+      ]
     );
 
-
     /*
-     * Envoyer l'e-mail.
+     * Envoyer l'e-mail de réinitialisation.
      */
     try {
-
       await sendPasswordResetEmail({
         to: user.email,
         token: rawToken
       });
-
-      console.log(
-  'PASSWORD_RESET_EMAIL_SENT:',
-  user.email
-);
-
     } catch (emailError) {
-
-      db.prepare(`
-        DELETE FROM password_reset_tokens
-        WHERE token_hash = ?
-      `).run(tokenHash);
+      try {
+        await pool.query(
+          `
+            DELETE FROM password_reset_tokens
+            WHERE token_hash = $1
+          `,
+          [tokenHash]
+        );
+      } catch (cleanupError) {
+        console.error(
+          'PASSWORD_RESET_TOKEN_CLEANUP_FAILED:',
+          cleanupError
+        );
+      }
 
       console.error(
         'PASSWORD_RESET_EMAIL_FAILED:',
         emailError
       );
 
-console.error(
-  'PASSWORD_RESET_EMAIL_FAILED_DETAILS:',
-  JSON.stringify({
-    email: user.email,
-    name: emailError && emailError.name,
-    message: emailError && emailError.message
-  })
-);
-      
       return res.status(503).json({
         error: 'PASSWORD_RESET_EMAIL_FAILED',
         message:
           'Impossible d’envoyer l’e-mail de réinitialisation. Veuillez réessayer plus tard.'
       });
     }
-
 
     return res.status(200).json({
       success: true,
