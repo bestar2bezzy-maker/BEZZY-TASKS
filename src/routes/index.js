@@ -2905,10 +2905,8 @@ router.post('/auth/logout', async (req, res, next) => {
           [
             new Date().toISOString(),
             refreshTokenHash
-          ]
-        );
-    )
-     )
+            ]
+          );
 
     /*
      * Supprimer le cookie côté navigateur.
