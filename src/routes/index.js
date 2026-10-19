@@ -1609,21 +1609,7 @@ router.post('/auth/register', async (req, res, next) => {
     );
 
 
-    /*
-     * ========================================================
-     * CREATION UTILISATEUR
-     * ========================================================
-     */
-
-    const userId = crypto.randomUUID();
-
-    const ownReferralCode =
-  'BZ' +
-  crypto.randomBytes(4)
-    .toString('hex')
-    .toUpperCase();
-
-    /*
+        /*
      * ========================================================
      * CREATION UTILISATEUR ET TOKEN DANS NEON
      * ========================================================
@@ -1678,37 +1664,6 @@ router.post('/auth/register', async (req, res, next) => {
       tokenHash,
       expiresAt
     });
-
-    /*
-     * Hash SHA-256 du token.
-     */
-    const tokenHash = crypto
-      .createHash('sha256')
-      .update(rawToken)
-      .digest('hex');
-
-
-    /*
-     * Validité du lien :
-     * 24 heures.
-     */
-    const expiresAt = new Date(
-      Date.now() + 24 * 60 * 60 * 1000
-    ).toISOString();
-
-
-    db.prepare(`
-      INSERT INTO email_verification_tokens (
-        user_id,
-        token_hash,
-        expires_at
-      )
-      VALUES (?, ?, ?)
-    `).run(
-      userId,
-      tokenHash,
-      expiresAt
-    );
 
 
     /*
