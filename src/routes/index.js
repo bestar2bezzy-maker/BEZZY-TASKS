@@ -3330,33 +3330,39 @@ router.get('/auth/google/callback', async (req, res, next) => {
      * Nettoyer les anciens tokens inutilisables
      * de cet utilisateur.
      */
-    db.prepare(`
-      DELETE FROM refresh_tokens
-      WHERE user_id = ?
-        AND (
-          revoked_at IS NOT NULL
-          OR expires_at <= ?
-        )
-    `).run(
-      user.id,
-      new Date().toISOString()
+        await pool.query(
+      `
+        DELETE FROM refresh_tokens
+        WHERE user_id = $1
+          AND (
+            revoked_at IS NOT NULL
+            OR expires_at <= $2
+          )
+      `,
+      [
+        user.id,
+        new Date().toISOString()
+      ]
     );
 
 
     /*
      * Enregistrer uniquement le hash.
      */
-    db.prepare(`
-      INSERT INTO refresh_tokens (
-        user_id,
-        token_hash,
-        expires_at
-      )
-      VALUES (?, ?, ?)
-    `).run(
-      user.id,
-      refreshTokenHash,
-      refreshExpiresAt
+    await pool.query(
+      `
+        INSERT INTO refresh_tokens (
+          user_id,
+          token_hash,
+          expires_at
+        )
+        VALUES ($1, $2, $3)
+      `,
+      [
+        user.id,
+        refreshTokenHash,
+        refreshExpiresAt
+      ]
     );
 
 
