@@ -1525,24 +1525,17 @@ router.post('/auth/register', async (req, res, next) => {
       });
     }
 
-
-    const db = getDb();
-
-
     /*
      * ========================================================
-     * EMAIL DEJA UTILISE
+     * VERIFICATIONS DANS NEON POSTGRESQL
      * ========================================================
      */
 
-    const existingEmail = db
-      .prepare(`
-        SELECT id
-        FROM users
-        WHERE LOWER(email) = LOWER(?)
-      `)
-      .get(normalizedEmail);
+    /*
+     * EMAIL DEJA UTILISE
+     */
 
+    const existingEmail = await findUserByEmail(normalizedEmail);
 
     if (existingEmail) {
       return res.status(409).json({
@@ -1551,11 +1544,8 @@ router.post('/auth/register', async (req, res, next) => {
       });
     }
 
-
     /*
-     * ========================================================
      * TELEPHONE INTERNATIONAL
-     * ========================================================
      */
 
     const internationalPhone = buildInternationalPhone(
@@ -1563,64 +1553,49 @@ router.post('/auth/register', async (req, res, next) => {
       countryCode
     );
 
-
     /*
-     * ========================================================
      * TELEPHONE DEJA UTILISE
-     * ========================================================
      */
 
-    const existingPhone = db
-      .prepare(`
-        SELECT id
-        FROM users
-        WHERE phone = ?
-           OR phone = ?
-      `)
-      .get(
-        normalizedPhone,
-        internationalPhone
-      );
+    const existingPhoneNational = await findUserByPhone(
+      normalizedPhone
+    );
 
+    const existingPhoneInternational = existingPhoneNational
+      ? null
+      : await findUserByPhone(internationalPhone);
 
-    if (existingPhone) {
+    if (existingPhoneNational || existingPhoneInternational) {
       return res.status(409).json({
         error: 'PHONE_EXISTS',
         message: 'Phone number already registered'
       });
     }
 
-  /*
- * ========================================================
- * VALIDATION DU CODE DE PARRAINAGE
- * ========================================================
- */
+    /*
+     * VALIDATION DU CODE DE PARRAINAGE
+     */
 
-const normalizedReferralCode =
-  referralCode
-    ? String(referralCode).trim()
-    : null;
+    const normalizedReferralCode = referralCode
+      ? String(referralCode).trim()
+      : null;
 
-let referralUserId = null;
+    let referralUserId = null;
 
-if (normalizedReferralCode) {
-  const referralUser = db.prepare(`
-    SELECT id
-    FROM users
-    WHERE referral_code = ?
-    LIMIT 1
-  `).get(normalizedReferralCode);
+    if (normalizedReferralCode) {
+      const referralUser = await findUserByReferralCode(
+        normalizedReferralCode
+      );
 
-  if (!referralUser) {
-    return res.status(400).json({
-      error: 'INVALID_REFERRAL_CODE',
-      message: 'Code de parrainage invalide'
-    });
-  }
+      if (!referralUser) {
+        return res.status(400).json({
+          error: 'INVALID_REFERRAL_CODE',
+          message: 'Code de parrainage invalide'
+        });
+      }
 
-  referralUserId = referralUser.id;
-}
-
+      referralUserId = referralUser.id;
+          }
 
     /*
      * ========================================================
