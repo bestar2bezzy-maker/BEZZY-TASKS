@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 
 const { getDb } = require('../config/database');
+const { getPostgresPool } = require('../config/postgres');
 const env = require('../config/env');
 const {
   findUserByEmail,
@@ -1753,7 +1754,7 @@ router.post('/auth/register', async (req, res, next) => {
  * Le token brut n'est jamais stocké en base.
  */
 
-router.get('/auth/verify-email', (req, res, next) => {
+router.get('/auth/verify-email', async (req, res, next) => {
   try {
 
     const token = String(
