@@ -2908,6 +2908,9 @@ router.post('/auth/logout', async (req, res, next) => {
             ]
           );
 
+      }
+    }
+
     /*
      * Supprimer le cookie côté navigateur.
      */
