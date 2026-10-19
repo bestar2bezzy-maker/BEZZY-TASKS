@@ -2651,7 +2651,7 @@ if (!passwordOk) {
  * ============================================================
  */
 
-router.post('/auth/refresh', (req, res, next) => {
+router.post('/auth/refresh', async (req, res, next) => {
   try {
 
     /*
