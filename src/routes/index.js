@@ -1688,7 +1688,7 @@ router.post('/auth/register', async (req, res, next) => {
        * On supprime le token inutilisable.
        */
 
-            try {
+                 try {
         await deleteEmailVerificationToken(
           userId,
           tokenHash
@@ -1698,12 +1698,7 @@ router.post('/auth/register', async (req, res, next) => {
           'VERIFICATION_TOKEN_CLEANUP_FAILED:',
           deleteError
         );
-            }
-      `).run(
-        userId,
-        tokenHash
-      );
-
+  } 
 
       console.error(
         'VERIFICATION_EMAIL_FAILED:',
