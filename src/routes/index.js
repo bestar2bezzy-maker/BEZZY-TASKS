@@ -2861,7 +2861,7 @@ router.post('/auth/refresh', async (req, res, next) => {
  * le cookie de session.
  */
 
-router.post('/auth/logout', (req, res, next) => {
+router.post('/auth/logout', async (req, res, next) => {
   try {
 
     const cookies = String(
@@ -2890,23 +2890,25 @@ router.post('/auth/logout', (req, res, next) => {
 
         const refreshTokenHash =
           hashRefreshToken(refreshToken);
-
-        const db = getDb();
+        const pool = getPostgresPool();
 
         /*
          * Révoquer uniquement le token actuel.
          */
-        db.prepare(`
-          UPDATE refresh_tokens
-          SET revoked_at = ?
-          WHERE token_hash = ?
-            AND revoked_at IS NULL
-        `).run(
-          new Date().toISOString(),
-          refreshTokenHash
+        await pool.query(
+          `
+            UPDATE refresh_tokens
+            SET revoked_at = $1
+            WHERE token_hash = $2
+              AND revoked_at IS NULL
+          `,
+          [
+            new Date().toISOString(),
+            refreshTokenHash
+          ]
         );
-      }
-    }
+    )
+     )
 
     /*
      * Supprimer le cookie côté navigateur.
