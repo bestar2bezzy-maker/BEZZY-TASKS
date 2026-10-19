@@ -3497,24 +3497,28 @@ router.get('/me', requireAuth, async (req, res, next) => {
  * Petite route utile pour vérifier l'état du compte.
  */
 
-router.get('/auth/status', requireAuth, (req, res, next) => {
+router.get('/auth/status', requireAuth, async (req, res, next) => {
   try {
+    const pool = getPostgresPool();
 
-    const db = getDb();
+    const userResult = await pool.query(
+      `
+        SELECT
+          id,
+          email,
+          phone,
+          country_code,
+          role,
+          status,
+          email_verified_at
+        FROM users
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [req.user.sub]
+    );
 
-    const user = db.prepare(`
-      SELECT
-        id,
-        email,
-        phone,
-        country_code,
-        role,
-        status,
-        email_verified_at
-      FROM users
-      WHERE id = ?
-      LIMIT 1
-    `).get(req.user.sub);
+    const user = userResult.rows[0] || null;
 
     if (!user) {
       return res.status(404).json({
@@ -3524,9 +3528,7 @@ router.get('/auth/status', requireAuth, (req, res, next) => {
 
     return res.json({
       authenticated: true,
-      email_verified: Boolean(
-        user.email_verified_at
-      ),
+      email_verified: Boolean(user.email_verified_at),
       user: {
         id: user.id,
         email: user.email,
