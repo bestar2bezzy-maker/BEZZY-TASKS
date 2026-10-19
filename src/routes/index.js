@@ -1814,27 +1814,30 @@ router.get('/auth/verify-email', async (req, res, next) => {
       .update(token)
       .digest('hex');
 
-
-    const db = getDb();
-
+    const pool = getPostgresPool();
 
     /*
      * ========================================================
-     * RECHERCHE DU TOKEN
+     * RECHERCHE DU TOKEN DANS NEON
      * ========================================================
      */
 
-    const verificationToken = db.prepare(`
-      SELECT
-        id,
-        user_id,
-        token_hash,
-        expires_at,
-        used_at
-      FROM email_verification_tokens
-      WHERE token_hash = ?
-      LIMIT 1
-    `).get(tokenHash);
+    const tokenResult = await pool.query(
+      `
+        SELECT
+          id,
+          user_id,
+          token_hash,
+          expires_at,
+          used_at
+        FROM email_verification_tokens
+        WHERE token_hash = $1
+        LIMIT 1
+      `,
+      [tokenHash]
+    );
+
+    const verificationToken = tokenResult.rows[0] || null;
 
 
     /*
