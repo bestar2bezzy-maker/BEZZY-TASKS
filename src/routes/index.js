@@ -1623,54 +1623,61 @@ router.post('/auth/register', async (req, res, next) => {
     .toString('hex')
     .toUpperCase();
 
-    db.prepare(`
-INSERT INTO users (
-  id,
-  email,
-  phone,
-  country_code,
-  password_hash,
-  full_name,
-  referral_code,
-  referred_by_code,
-  referred_by_user_id
-)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-`).run(
-    userId,
-normalizedEmail,
-internationalPhone,
-countryCode,
-passwordHash,
-fullName ? String(fullName).trim() : null,
-ownReferralCode,
-normalizedReferralCode,
-referralUserId
-      );
-
     /*
      * ========================================================
-     * TOKEN VERIFICATION EMAIL
-
-    /*
-     * Suppression des anciens tokens non utilisés.
+     * CREATION UTILISATEUR ET TOKEN DANS NEON
+     * ========================================================
      */
-    db.prepare(`
-      DELETE FROM email_verification_tokens
-      WHERE user_id = ?
-        AND used_at IS NULL
-    `).run(userId);
 
+    const userId = crypto.randomUUID();
+
+    const ownReferralCode =
+      'BZ' +
+      crypto.randomBytes(4)
+        .toString('hex')
+        .toUpperCase();
 
     /*
-     * Token brut.
-     *
-     * Il n'est JAMAIS enregistré directement en base.
+     * Token brut : envoyé par e-mail uniquement.
      */
     const rawToken = crypto
       .randomBytes(32)
       .toString('hex');
 
+    /*
+     * Seul le hash du token est enregistré en base.
+     */
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(rawToken)
+      .digest('hex');
+
+    /*
+     * Le lien de vérification est valable 24 heures.
+     */
+    const expiresAt = new Date(
+      Date.now() + 24 * 60 * 60 * 1000
+    ).toISOString();
+
+    /*
+     * Création du compte et du token
+     * dans une transaction PostgreSQL.
+     */
+    await createUserWithVerificationToken({
+      userId,
+      email: normalizedEmail,
+      phone: internationalPhone,
+      countryCode,
+      passwordHash,
+      fullName: fullName
+        ? String(fullName).trim()
+        : null,
+      referralCode: ownReferralCode,
+      referredByCode: normalizedReferralCode,
+      referredByUserId: referralUserId,
+      tokenHash,
+      expiresAt
+    });
 
     /*
      * Hash SHA-256 du token.
@@ -1726,10 +1733,17 @@ referralUserId
        * On supprime le token inutilisable.
        */
 
-      db.prepare(`
-        DELETE FROM email_verification_tokens
-        WHERE user_id = ?
-          AND token_hash = ?
+            try {
+        await deleteEmailVerificationToken(
+          userId,
+          tokenHash
+        );
+      } catch (deleteError) {
+        console.error(
+          'VERIFICATION_TOKEN_CLEANUP_FAILED:',
+          deleteError
+        );
+            }
       `).run(
         userId,
         tokenHash
