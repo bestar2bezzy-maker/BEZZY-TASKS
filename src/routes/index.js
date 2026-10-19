@@ -3400,28 +3400,32 @@ router.get('/auth/google/callback', async (req, res, next) => {
  * ============================================================
  */
 
-router.get('/me', requireAuth, (req, res, next) => {
+router.get('/me', requireAuth, async (req, res, next) => {
   try {
+    const pool = getPostgresPool();
 
-    const db = getDb();
+    const userResult = await pool.query(
+      `
+        SELECT
+          id,
+          email,
+          phone,
+          country_code,
+          referral_code,
+          referred_by_code,
+          full_name,
+          role,
+          status,
+          email_verified_at,
+          created_at
+        FROM users
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [req.user.sub]
+    );
 
-    const user = db.prepare(`
-      SELECT
-        id,
-        email,
-        phone,
-        country_code,
-        referral_code,
-        referred_by_code,
-        full_name,
-        role,
-        status,
-        email_verified_at,
-        created_at
-      FROM users
-      WHERE id = ?
-      LIMIT 1
-    `).get(req.user.sub);
+    const user = userResult.rows[0] || null;
 
     if (!user) {
       return res.status(404).json({
@@ -3430,46 +3434,53 @@ router.get('/me', requireAuth, (req, res, next) => {
       });
     }
 
-    const balanceRow = db.prepare(`
-      SELECT
-        COALESCE(
-          SUM(
-            CASE
-              WHEN direction = 'CREDIT'
-                THEN amount_minor
-              ELSE -amount_minor
-            END
-          ),
-          0
-        ) AS balance
-      FROM ledger_entries
-      WHERE user_id = ?
-    `).get(user.id);
+    const balanceResult = await pool.query(
+      `
+        SELECT
+          COALESCE(
+            SUM(
+              CASE
+                WHEN direction = 'CREDIT'
+                  THEN amount_minor
+                ELSE -amount_minor
+              END
+            ),
+            0
+          ) AS balance
+        FROM ledger_entries
+        WHERE user_id = $1
+      `,
+      [user.id]
+    );
 
-    const earnedRow = db.prepare(`
-      SELECT
-        COALESCE(
-          SUM(
-            CASE
-              WHEN direction = 'CREDIT'
-                THEN amount_minor
-              ELSE 0
-            END
-          ),
-          0
-        ) AS total_earned
-      FROM ledger_entries
-      WHERE user_id = ?
-    `).get(user.id);
+    const earnedResult = await pool.query(
+      `
+        SELECT
+          COALESCE(
+            SUM(
+              CASE
+                WHEN direction = 'CREDIT'
+                  THEN amount_minor
+                ELSE 0
+              END
+            ),
+            0
+          ) AS total_earned
+        FROM ledger_entries
+        WHERE user_id = $1
+      `,
+      [user.id]
+    );
+
+    const balanceRow = balanceResult.rows[0] || {};
+    const earnedRow = earnedResult.rows[0] || {};
 
     return res.json({
       user: {
         ...user,
         balance: Number(balanceRow.balance || 0),
         total_earned: Number(earnedRow.total_earned || 0),
-        email_verified: Boolean(
-          user.email_verified_at
-        )
+        email_verified: Boolean(user.email_verified_at)
       }
     });
 
