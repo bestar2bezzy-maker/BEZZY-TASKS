@@ -1999,57 +1999,70 @@ router.get('/auth/verify-email', async (req, res, next) => {
      * VERIFICATION DU COMPTE
      * ========================================================
      */
+    /*
+     * ========================================================
+     * VERIFICATION DU COMPTE DANS NEON
+     * ========================================================
+     */
 
-    const verifyTransaction = db.transaction(() => {
+    const client = await pool.connect();
 
-      const user = db.prepare(`
-        SELECT
-          id,
-          email_verified_at
-        FROM users
-        WHERE id = ?
-        LIMIT 1
-      `).get(verificationToken.user_id);
+    try {
+      await client.query('BEGIN');
 
+      const userResult = await client.query(
+        `
+          SELECT
+            id,
+            email_verified_at
+          FROM users
+          WHERE id = $1
+          LIMIT 1
+          FOR UPDATE
+        `,
+        [verificationToken.user_id]
+      );
+
+      const user = userResult.rows[0];
 
       if (!user) {
         throw new Error('USER_NOT_FOUND');
       }
 
-
       /*
-       * Si le compte était déjà vérifié,
-       * on marque simplement le token comme utilisé.
+       * Activation du compte si nécessaire.
        */
-
       if (!user.email_verified_at) {
-
-        db.prepare(`
-          UPDATE users
-          SET email_verified_at = ?
-          WHERE id = ?
-        `).run(
-          new Date().toISOString(),
-          user.id
+        await client.query(
+          `
+            UPDATE users
+            SET email_verified_at = CURRENT_TIMESTAMP
+            WHERE id = $1
+          `,
+          [user.id]
         );
-
       }
 
-
-      db.prepare(`
-        UPDATE email_verification_tokens
-        SET used_at = ?
-        WHERE id = ?
-          AND used_at IS NULL
-      `).run(
-        new Date().toISOString(),
-        verificationToken.id
+      /*
+       * Marquer le token comme utilisé.
+       */
+      await client.query(
+        `
+          UPDATE email_verification_tokens
+          SET used_at = CURRENT_TIMESTAMP
+          WHERE id = $1
+            AND used_at IS NULL
+        `,
+        [verificationToken.id]
       );
 
-    });
-
-
-    verifyTransaction();
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+  }
 
 
     /*
