@@ -2696,8 +2696,7 @@ router.post('/auth/refresh', (req, res, next) => {
       hashRefreshToken(refreshToken);
 
 
-    const db = getDb();
-
+        const pool = getPostgresPool();
 
     /*
      * Chercher uniquement un token :
@@ -2705,27 +2704,32 @@ router.post('/auth/refresh', (req, res, next) => {
      * - non révoqué
      * - non expiré
      */
-    const storedToken = db.prepare(`
-      SELECT
-        rt.id,
-        rt.user_id,
-        rt.expires_at,
-        u.role,
-        u.country_code,
-        u.status,
-        u.email_verified_at
-      FROM refresh_tokens rt
-      INNER JOIN users u
-        ON u.id = rt.user_id
-      WHERE rt.token_hash = ?
-        AND rt.revoked_at IS NULL
-        AND rt.expires_at > ?
-      LIMIT 1
-    `).get(
-      refreshTokenHash,
-      new Date().toISOString()
+    const storedTokenResult = await pool.query(
+      `
+        SELECT
+          rt.id,
+          rt.user_id,
+          rt.expires_at,
+          u.role,
+          u.country_code,
+          u.status,
+          u.email_verified_at
+        FROM refresh_tokens rt
+        INNER JOIN users u
+          ON u.id = rt.user_id
+        WHERE rt.token_hash = $1
+          AND rt.revoked_at IS NULL
+          AND rt.expires_at > $2
+        LIMIT 1
+      `,
+      [
+        refreshTokenHash,
+        new Date().toISOString()
+      ]
     );
 
+    const storedToken =
+      storedTokenResult.rows[0] || null;
 
     /*
      * Token absent, expiré ou révoqué.
@@ -2773,15 +2777,18 @@ router.post('/auth/refresh', (req, res, next) => {
      * Un nouveau refresh token est créé.
      */
 
-    db.prepare(`
-      UPDATE refresh_tokens
-      SET revoked_at = ?
-      WHERE id = ?
-    `).run(
-      new Date().toISOString(),
-      storedToken.id
+    
+          await pool.query(
+      `
+        UPDATE refresh_tokens
+        SET revoked_at = $1
+        WHERE id = $2
+      `,
+      [
+        new Date().toISOString(),
+        storedToken.id
+      ]
     );
-
 
     const newRefreshToken =
       generateRefreshToken();
@@ -2796,19 +2803,21 @@ router.post('/auth/refresh', (req, res, next) => {
       ).toISOString();
 
 
-    db.prepare(`
-      INSERT INTO refresh_tokens (
-        user_id,
-        token_hash,
-        expires_at
-      )
-      VALUES (?, ?, ?)
-    `).run(
-      storedToken.user_id,
-      newRefreshTokenHash,
-      newRefreshExpiresAt
+        await pool.query(
+      `
+        INSERT INTO refresh_tokens (
+          user_id,
+          token_hash,
+          expires_at
+        )
+        VALUES ($1, $2, $3)
+      `,
+      [
+        storedToken.user_id,
+        newRefreshTokenHash,
+        newRefreshExpiresAt
+      ]
     );
-
 
     /*
      * Créer le nouvel access token.
