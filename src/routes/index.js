@@ -2193,17 +2193,22 @@ router.post('/auth/resend-verification', async (req, res, next) => {
       });
     }
 
-    const db = getDb();
+    const pool = getPostgresPool();
 
-    const user = db.prepare(`
-      SELECT
-        id,
-        email,
-        email_verified_at
-      FROM users
-      WHERE LOWER(email) = LOWER(?)
-      LIMIT 1
-    `).get(normalizedEmail);
+    const userResult = await pool.query(
+      `
+        SELECT
+          id,
+          email,
+          email_verified_at
+        FROM users
+        WHERE LOWER(email) = LOWER($1)
+        LIMIT 1
+      `,
+      [normalizedEmail]
+    );
+
+    const user = userResult.rows[0] || null;
 
     /*
      * Ne pas révéler l'existence du compte.
@@ -2229,52 +2234,62 @@ router.post('/auth/resend-verification', async (req, res, next) => {
     }
 
     /*
-     * Supprimer les anciens tokens encore inutilisés.
-     */
-    db.prepare(`
-      DELETE FROM email_verification_tokens
-      WHERE user_id = ?
-        AND used_at IS NULL
-    `).run(user.id);
-
-    /*
-     * Nouveau token.
+     * Nouveau token cryptographiquement aléatoire.
      */
     const rawToken = crypto
       .randomBytes(32)
       .toString('hex');
 
+    /*
+     * Seul le hash du token sera stocké dans Neon.
+     */
     const tokenHash = crypto
       .createHash('sha256')
       .update(rawToken)
       .digest('hex');
 
     /*
-     * Nouveau délai de validité :
-     * 24 heures.
+     * Validité du lien : 24 heures.
      */
     const expiresAt = new Date(
       Date.now() + 24 * 60 * 60 * 1000
-    ).toISOString();
-
-    db.prepare(`
-      INSERT INTO email_verification_tokens (
-        user_id,
-        token_hash,
-        expires_at
-      )
-      VALUES (?, ?, ?)
-    `).run(
-      user.id,
-      tokenHash,
-      expiresAt
     );
 
     /*
-     * Envoi réel avec Resend.
+     * Remplacer les anciens tokens encore inutilisés.
+     */
+    await pool.query(
+      `
+        DELETE FROM email_verification_tokens
+        WHERE user_id = $1
+          AND used_at IS NULL
+      `,
+      [user.id]
+    );
+
+    /*
+     * Enregistrer le nouveau token dans Neon.
+     */
+    await pool.query(
+      `
+        INSERT INTO email_verification_tokens (
+          user_id,
+          token_hash,
+          expires_at
+        )
+        VALUES ($1, $2, $3)
+      `,
+      [
+        user.id,
+        tokenHash,
+        expiresAt
+      ]
+    );
+
+    /*
+     * Envoyer l'e-mail de vérification.
      */
     try {
-
       await sendVerificationEmail({
         to: user.email,
         token: rawToken
@@ -2282,14 +2297,27 @@ router.post('/auth/resend-verification', async (req, res, next) => {
 
     } catch (emailError) {
 
-      db.prepare(`
-        DELETE FROM email_verification_tokens
-        WHERE user_id = ?
-          AND token_hash = ?
-      `).run(
-        user.id,
-        tokenHash
-      );
+      /*
+       * Si l'envoi échoue, supprimer le token créé.
+       */
+      try {
+        await pool.query(
+          `
+            DELETE FROM email_verification_tokens
+            WHERE user_id = $1
+              AND token_hash = $2
+          `,
+          [
+            user.id,
+            tokenHash
+          ]
+        );
+      } catch (cleanupError) {
+        console.error(
+          'RESEND_VERIFICATION_TOKEN_CLEANUP_FAILED:',
+          cleanupError
+        );
+      }
 
       console.error(
         'RESEND_VERIFICATION_EMAIL_FAILED:',
