@@ -4,6 +4,13 @@ const bcrypt = require('bcryptjs');
 
 const { getDb } = require('../config/database');
 const env = require('../config/env');
+const {
+  findUserByEmail,
+  findUserByPhone,
+  findUserByReferralCode,
+  createUserWithVerificationToken,
+  deleteEmailVerificationToken
+} = require('../config/auth-postgres');
 
 const {
   signAccessToken,
