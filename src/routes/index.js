@@ -3214,12 +3214,17 @@ router.get('/auth/google/callback', async (req, res, next) => {
 
     if (!user) {
 
-      user = db.prepare(`
-        SELECT *
-        FROM users
-        WHERE LOWER(email) = LOWER(?)
-        LIMIT 1
-      `).get(googleEmail);
+            const emailUserResult = await pool.query(
+        `
+          SELECT *
+          FROM users
+          WHERE LOWER(email) = LOWER($1)
+          LIMIT 1
+        `,
+        [googleEmail]
+      );
+
+      user = emailUserResult.rows[0] || null;
 
 
       /*
