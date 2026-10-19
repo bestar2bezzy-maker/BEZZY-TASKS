@@ -1254,19 +1254,13 @@ form.addEventListener("submit", async function(event) {
  */
 
 router.post('/auth/reset-password', async (req, res, next) => {
+  let client;
+
   try {
+    const { token, password } = req.body || {};
 
-    const {
-      token,
-      password
-    } = req.body || {};
-
-    const rawToken =
-      String(token || '').trim();
-
-    const newPassword =
-      String(password || '');
-
+    const rawToken = String(token || '').trim();
+    const newPassword = String(password || '');
 
     if (!rawToken) {
       return res.status(400).json({
@@ -1275,130 +1269,135 @@ router.post('/auth/reset-password', async (req, res, next) => {
       });
     }
 
-
     if (newPassword.length < 8) {
       return res.status(400).json({
         error: 'INVALID_PASSWORD',
-        message:
-          'Password must contain at least 8 characters'
+        message: 'Password must contain at least 8 characters'
       });
     }
-
 
     const tokenHash = crypto
       .createHash('sha256')
       .update(rawToken)
       .digest('hex');
 
+    const pool = getPostgresPool();
 
-    const db = getDb();
+    client = await pool.connect();
 
+    await client.query('BEGIN');
 
-    const resetToken = db.prepare(`
-      SELECT
-        id,
-        user_id,
-        expires_at,
-        used_at
-      FROM password_reset_tokens
-      WHERE token_hash = ?
-      LIMIT 1
-    `).get(tokenHash);
+    const tokenResult = await client.query(
+      `
+        SELECT
+          id,
+          user_id,
+          expires_at,
+          used_at
+        FROM password_reset_tokens
+        WHERE token_hash = $1
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [tokenHash]
+    );
 
+    const resetToken = tokenResult.rows[0] || null;
 
     if (!resetToken) {
+      await client.query('ROLLBACK');
       return res.status(400).json({
         error: 'INVALID_RESET_TOKEN',
-        message:
-          'Ce lien de réinitialisation est invalide ou expiré.'
+        message: 'Ce lien de réinitialisation est invalide ou expiré.'
       });
     }
-
 
     if (resetToken.used_at) {
+      await client.query('ROLLBACK');
       return res.status(400).json({
         error: 'RESET_TOKEN_USED',
-        message:
-          'Ce lien de réinitialisation a déjà été utilisé.'
+        message: 'Ce lien de réinitialisation a déjà été utilisé.'
       });
     }
-
 
     if (
       !resetToken.expires_at ||
       new Date(resetToken.expires_at).getTime() < Date.now()
     ) {
+      await client.query('ROLLBACK');
       return res.status(400).json({
         error: 'RESET_TOKEN_EXPIRED',
-        message:
-          'Ce lien de réinitialisation est expiré.'
+        message: 'Ce lien de réinitialisation est expiré.'
       });
     }
 
+    const passwordHash = await bcrypt.hash(newPassword, 12);
 
-    const passwordHash =
-      await bcrypt.hash(
-        newPassword,
-        12
-      );
+    const updateUser = await client.query(
+      `
+        UPDATE users
+        SET password_hash = $1
+        WHERE id = $2
+      `,
+      [passwordHash, resetToken.user_id]
+    );
 
+    if (updateUser.rowCount === 0) {
+      throw new Error('USER_NOT_FOUND');
+    }
 
-    const updateUser = db.prepare(`
-      UPDATE users
-      SET password_hash = ?
-      WHERE id = ?
-    `);
-
-
-    const markTokenUsed = db.prepare(`
-      UPDATE password_reset_tokens
-      SET used_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `);
-
-
-    const transaction = db.transaction(() => {
-
-      const result = updateUser.run(
-        passwordHash,
-        resetToken.user_id
-      );
-
-      if (!result.changes) {
-        throw new Error('USER_NOT_FOUND');
-      }
-
-      markTokenUsed.run(
-        resetToken.id
-      );
-
-      /*
-       * Invalider les autres tokens de réinitialisation
-       * encore actifs pour ce compte.
-       */
-      db.prepare(`
+    await client.query(
+      `
         UPDATE password_reset_tokens
         SET used_at = CURRENT_TIMESTAMP
-        WHERE user_id = ?
+        WHERE user_id = $1
           AND used_at IS NULL
-      `).run(resetToken.user_id);
+      `,
+      [resetToken.user_id]
+    );
 
-    });
+    /*
+     * Invalider également les sessions actives du compte,
+     * afin d'obliger les connexions suivantes à se réauthentifier.
+     */
+    await client.query(
+      `
+        UPDATE refresh_tokens
+        SET revoked_at = CURRENT_TIMESTAMP
+        WHERE user_id = $1
+          AND revoked_at IS NULL
+      `,
+      [resetToken.user_id]
+    );
 
-
-    transaction();
-
+    await client.query('COMMIT');
 
     return res.status(200).json({
       success: true,
-      message:
-        'Mot de passe modifié avec succès.'
+      message: 'Mot de passe modifié avec succès.'
     });
 
   } catch (error) {
+    if (client) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        console.error(
+          'PASSWORD_RESET_ROLLBACK_FAILED:',
+          rollbackError
+        );
+      }
+    }
+
     next(error);
+
+  } finally {
+    if (client) {
+      client.release();
+    }
   }
 });
+
 
 /*
  * ============================================================
