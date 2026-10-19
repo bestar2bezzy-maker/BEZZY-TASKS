@@ -3232,29 +3232,32 @@ router.get('/auth/google/callback', async (req, res, next) => {
        * on lie le compte Google.
        */
       if (user) {
-
-        db.prepare(`
-          UPDATE users
-          SET
-            google_sub = ?,
-            email_verified_at =
-              COALESCE(
+        const linkedUserResult = await pool.query(
+          `
+            UPDATE users
+            SET
+              google_sub = $1,
+              email_verified_at = COALESCE(
                 email_verified_at,
-                ?
+                $2
               )
-          WHERE id = ?
-        `).run(
-          googleSub,
-          new Date().toISOString(),
-          user.id
+            WHERE id = $3
+            RETURNING *
+          `,
+          [
+            googleSub,
+            new Date().toISOString(),
+            user.id
+          ]
         );
 
-        user = db.prepare(`
-          SELECT *
-          FROM users
-          WHERE id = ?
-          LIMIT 1
-        `).get(user.id);
+        user = linkedUserResult.rows[0] || null;
+
+        if (!user) {
+          return res.status(404).send(
+            'Bezzy Tasks account not found.'
+          );
+        }
 
       } else {
 
