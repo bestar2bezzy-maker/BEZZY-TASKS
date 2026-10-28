@@ -16,11 +16,11 @@ const router = express.Router();
 
 router.use(requireAuth);
 
-router.get('/', (req, res, next) => {
+router.get('/', async (req, res, next) => {
   try {
-    const db = getDb();
+    const pool = getPostgresPool();
 
-    const tasks = db.prepare(`
+    const result = await pool.query(`
       SELECT
         id,
         title,
@@ -37,7 +37,29 @@ router.get('/', (req, res, next) => {
       FROM tasks
       WHERE status = 'ACTIVE'
       ORDER BY created_at DESC
-    `).all();
+    `);
+
+    const tasksWithRewards = result.rows.map(task => {
+      const reward = calculateTaskReward(task);
+
+      return {
+        id: task.id,
+        title: task.title,
+        description: task.description,
+        reward: reward.user_reward_minor,
+        currency: reward.currency,
+        status: task.status,
+        created_at: task.created_at
+      };
+    });
+
+    res.json({
+      tasks: tasksWithRewards
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
     const tasksWithRewards = tasks.map(task => {
 
