@@ -61,11 +61,11 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-router.get('/history/me', (req, res, next) => {
+router.get('/history/me', async (req, res, next) => {
   try {
-    const db = getDb();
+    const pool = getPostgresPool();
 
-    const history = db.prepare(`
+    const result = await pool.query(`
       SELECT
         tc.id,
         tc.task_id,
@@ -78,11 +78,11 @@ router.get('/history/me', (req, res, next) => {
         t.currency
       FROM task_completions tc
       JOIN tasks t ON t.id = tc.task_id
-      WHERE tc.user_id = ?
+      WHERE tc.user_id = $1
       ORDER BY tc.submitted_at DESC
-    `).all(req.user.sub);
+    `, [req.user.sub]);
 
-    res.json({ history });
+    res.json({ history: result.rows });
   } catch (error) {
     next(error);
   }
