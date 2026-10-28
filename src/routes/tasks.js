@@ -120,15 +120,17 @@ router.get('/:id', async (req, res, next) => {
   }
 });
 
-router.post('/:id/start', (req, res, next) => {
+router.post('/:id/start', async (req, res, next) => {
   try {
-    const db = getDb();
+    const pool = getPostgresPool();
 
-    const task = db.prepare(`
+    const taskResult = await pool.query(`
       SELECT id, status
       FROM tasks
-      WHERE id = ?
-    `).get(req.params.id);
+      WHERE id = $1
+    `, [req.params.id]);
+
+    const task = taskResult.rows[0];
 
     if (!task || task.status !== 'ACTIVE') {
       return res.status(404).json({
@@ -137,68 +139,76 @@ router.post('/:id/start', (req, res, next) => {
       });
     }
 
-    const existing = db.prepare(`
+    const existingResult = await pool.query(`
       SELECT id, status
       FROM task_completions
-      WHERE user_id = ? AND task_id = ?
+      WHERE user_id = $1 AND task_id = $2
       LIMIT 1
-    `).get(req.user.sub, req.params.id);
+    `, [req.user.sub, req.params.id]);
+
+    const existing = existingResult.rows[0];
 
     if (
       existing &&
       ['PENDING', 'APPROVED', 'STARTED'].includes(existing.status)
     ) {
-      const completion = db.prepare(`
+      const completionResult = await pool.query(`
         SELECT *
         FROM task_completions
-        WHERE id = ?
-      `).get(existing.id);
+        WHERE id = $1
+      `, [existing.id]);
 
-      return res.json({ completion });
+      return res.json({
+        completion: completionResult.rows[0]
+      });
     }
 
     if (existing && existing.status === 'REJECTED') {
-      db.prepare(`
+      await pool.query(`
         UPDATE task_completions
         SET status = 'STARTED',
             evidence_json = NULL,
             submitted_at = CURRENT_TIMESTAMP,
             reviewed_at = NULL
-        WHERE id = ?
-      `).run(existing.id);
+        WHERE id = $1
+      `, [existing.id]);
 
-      const restarted = db.prepare(`
+      const restartedResult = await pool.query(`
         SELECT *
         FROM task_completions
-        WHERE id = ?
-      `).get(existing.id);
+        WHERE id = $1
+      `, [existing.id]);
 
-      return res.json({ completion: restarted });
+      return res.json({
+        completion: restartedResult.rows[0]
+      });
     }
 
     const completionId = crypto.randomUUID();
 
-    db.prepare(`
+    await pool.query(`
       INSERT INTO task_completions (
         id,
         user_id,
         task_id,
         status
       )
-      VALUES (?, ?, ?, 'STARTED')
-    `).run(
+      VALUES ($1, $2, $3, 'STARTED')
+    `, [
       completionId,
       req.user.sub,
       req.params.id
-    );
+    ]);
 
-    const completion = db.prepare(`
+    const completionResult = await pool.query(`
       SELECT *
       FROM task_completions
-      WHERE id = ?
-    `).get(completionId);
+      WHERE id = $1
+    `, [completionId]);
 
-    res.status(201).json({ completion });
+    res.status(201).json({
+      completion: completionResult.rows[0]
+    });
   } catch (error) {
     next(error);
   }
