@@ -61,30 +61,6 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-    const tasksWithRewards = tasks.map(task => {
-
-      const reward = calculateTaskReward(task);
-
-      return {
-        id: task.id,
-        title: task.title,
-        description: task.description,
-        reward: reward.user_reward_minor,
-        currency: reward.currency,
-        status: task.status,
-        created_at: task.created_at
-      };
-    });
-
-    res.json({
-      tasks: tasksWithRewards
-    });
-
-  } catch (error) {
-    next(error);
-  }
-});
-
 router.get('/history/me', (req, res, next) => {
   try {
     const db = getDb();
