@@ -360,9 +360,11 @@ router.post('/:id/submit', async (req, res, next) => {
 router.post(
   '/:id/review',
   requireRole('admin', 'moderator'),
-  (req, res, next) => {
+  async (req, res, next) => {
+    let client;
+
     try {
-      const db = getDb();
+      const pool = getPostgresPool();
       const { completion_id, decision } = req.body || {};
       const normalizedDecision = String(decision || '').toUpperCase();
 
@@ -376,108 +378,120 @@ router.post(
         });
       }
 
-const completion = db.prepare(`
-        SELECT
-          tc.*,
-          t.reward_minor,
-          t.partner_payout_minor,
-          t.reward_rate_bps,
-          t.max_user_reward_minor,
-          t.min_platform_margin_minor,
-          t.reward_model,
-          t.currency
-        FROM task_completions tc
-        JOIN tasks t ON t.id = tc.task_id
-        WHERE tc.id = ?
-      `).get(completion_id);
+      client = await pool.connect();
+      await client.query('BEGIN');
+
+      const completionResult = await client.query(
+        `
+          SELECT
+            tc.*,
+            t.reward_minor,
+            t.partner_payout_minor,
+            t.reward_rate_bps,
+            t.max_user_reward_minor,
+            t.min_platform_margin_minor,
+            t.reward_model,
+            t.currency
+          FROM task_completions tc
+          JOIN tasks t ON t.id = tc.task_id
+          WHERE tc.id = $1
+          FOR UPDATE OF tc
+        `,
+        [completion_id]
+      );
+
+      const completion = completionResult.rows[0];
 
       if (!completion) {
+        await client.query('ROLLBACK');
         return res.status(404).json({
           error: 'COMPLETION_NOT_FOUND'
         });
       }
 
       if (completion.status !== 'PENDING') {
+        await client.query('ROLLBACK');
         return res.status(409).json({
           error: 'ALREADY_REVIEWED'
         });
       }
 
-      const transaction = db.transaction(() => {
-        db.prepare(`
+      await client.query(
+        `
           UPDATE task_completions
-          SET status = ?,
+          SET status = $1,
               reviewed_at = CURRENT_TIMESTAMP
-          WHERE id = ?
-        `).run(
-          normalizedDecision,
-          completion_id
-        );
+          WHERE id = $2
+        `,
+        [normalizedDecision, completion_id]
+      );
 
-        if (normalizedDecision === 'APPROVED') {
+      if (normalizedDecision === 'APPROVED') {
+        const reward = calculateTaskReward(completion);
+        const idempotencyKey = `task-reward:${completion_id}`;
 
-          const reward = calculateTaskReward(
-            completion
-          );
-
-          const idempotencyKey =
-            `task-reward:${completion_id}`;
-
-          const existingLedger = db.prepare(`
-            SELECT id
-            FROM ledger_entries
-            WHERE idempotency_key = ?
-          `).get(idempotencyKey);
-
-          if (!existingLedger) {
-
-            if (reward.user_reward_minor <= 0) {
-              throw new Error(
-                'TASK_REWARD_INVALID'
-              );
-            }
-
-            db.prepare(`
-              INSERT INTO ledger_entries (
-                user_id,
-                entry_type,
-                direction,
-                amount_minor,
-                currency,
-                reference_type,
-                reference_id,
-                idempotency_key
-              )
-              VALUES (
-                ?,
-                'TASK_REWARD',
-                'CREDIT',
-                ?,
-                ?,
-                'TASK',
-                ?,
-                ?
-              )
-            `).run(
-              completion.user_id,
-              reward.user_reward_minor,
-              reward.currency,
-              completion.task_id,
-              idempotencyKey
-            );
-          }
+        if (
+          !reward ||
+          !Number.isFinite(Number(reward.user_reward_minor)) ||
+          Number(reward.user_reward_minor) <= 0
+        ) {
+          throw new Error('TASK_REWARD_INVALID');
         }
-      });
 
-      transaction();
+        await client.query(
+          `
+            INSERT INTO ledger_entries (
+              id,
+              user_id,
+              entry_type,
+              direction,
+              amount_minor,
+              currency,
+              reference_type,
+              reference_id,
+              idempotency_key
+            )
+            VALUES (
+              $1, $2, 'TASK_REWARD', 'CREDIT',
+              $3, $4, 'TASK', $5, $6
+            )
+            ON CONFLICT (idempotency_key) DO NOTHING
+          `,
+          [
+            crypto.randomUUID(),
+            completion.user_id,
+            reward.user_reward_minor,
+            reward.currency,
+            completion.task_id,
+            idempotencyKey
+          ]
+        );
+      }
 
-      res.json({
+      await client.query('COMMIT');
+
+      return res.json({
         status: 'ok',
         completion_id,
         decision: normalizedDecision
       });
     } catch (error) {
-      next(error);
+      if (client) {
+        try {
+          await client.query('ROLLBACK');
+        } catch (rollbackError) {
+          console.error(
+            'Task review rollback failed:',
+            rollbackError
+          );
+        }
+      }
+
+      return next(error);
+    } finally {
+      if (client) {
+        client.release();
+      }
     }
   }
 );
