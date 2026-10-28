@@ -214,12 +214,14 @@ router.post('/:id/start', async (req, res, next) => {
   }
 });
 
-router.post('/:id/submit', (req, res, next) => {
-  try {
-    const db = getDb();
-    const { evidence = null } = req.body || {};
+router.post('/:id/submit', async (req, res, next) => {
+  const pool = getPostgresPool();
+  const { evidence = null } = req.body || {};
 
-    const completion = db.prepare(`
+  let client;
+
+  try {
+    const completionResult = await pool.query(`
       SELECT
         tc.*,
         t.id AS task_id,
@@ -234,13 +236,15 @@ router.post('/:id/submit', (req, res, next) => {
         t.status AS task_status
       FROM task_completions tc
       JOIN tasks t ON t.id = tc.task_id
-      WHERE tc.user_id = ?
-        AND tc.task_id = ?
+      WHERE tc.user_id = $1
+        AND tc.task_id = $2
       LIMIT 1
-    `).get(
+    `, [
       req.user.sub,
       req.params.id
-    );
+    ]);
+
+    const completion = completionResult.rows[0];
 
     if (!completion) {
       return res.status(404).json({
@@ -269,82 +273,87 @@ router.post('/:id/submit', (req, res, next) => {
 
     let nextStatus = 'PENDING';
 
-    if (verification.status === 'REVIEW') {
-      nextStatus = 'PENDING';
-    }
-
     if (verification.status === 'REJECTED') {
       nextStatus = 'REJECTED';
     }
 
-    const transaction = db.transaction(() => {
+    client = await pool.connect();
 
-      db.prepare(`
-        UPDATE task_completions
-        SET status = ?,
-            evidence_json = ?,
-            submitted_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `).run(
-        nextStatus,
+    await client.query('BEGIN');
+
+    await client.query(`
+      UPDATE task_completions
+      SET status = $1,
+          evidence_json = $2,
+          submitted_at = CURRENT_TIMESTAMP
+      WHERE id = $3
+    `, [
+      nextStatus,
+      evidenceJson,
+      completion.id
+    ]);
+
+    if (
+      verification.partner_event_id &&
+      verification.partner_id
+    ) {
+      await client.query(`
+        INSERT INTO task_verification_events (
+          id,
+          completion_id,
+          task_id,
+          user_id,
+          partner_id,
+          external_event_id,
+          event_type,
+          payload_json,
+          verification_status
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        ON CONFLICT DO NOTHING
+      `, [
+        crypto.randomUUID(),
+        completion.id,
+        completion.task_id,
+        completion.user_id,
+        String(verification.partner_id),
+        String(verification.partner_event_id),
+        'SUBMISSION',
         evidenceJson,
-        completion.id
-      );
+        verification.status
+      ]);
+    }
 
-      /*
-       * Si la preuve contient déjà un événement partenaire,
-       * on conserve sa référence pour la vérification future.
-       */
-      if (
-        verification.partner_event_id &&
-        verification.partner_id
-      ) {
-        db.prepare(`
-          INSERT OR IGNORE INTO task_verification_events (
-            id,
-            completion_id,
-            task_id,
-            user_id,
-            partner_id,
-            external_event_id,
-            event_type,
-            payload_json,
-            verification_status
-          )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(
-          crypto.randomUUID(),
-          completion.id,
-          completion.task_id,
-          completion.user_id,
-          String(verification.partner_id),
-          String(verification.partner_event_id),
-          'SUBMISSION',
-          evidenceJson,
-          verification.status
-        );
-      }
-    });
+    await client.query('COMMIT');
 
-    transaction();
-
-    const updated = db.prepare(`
+    const updatedResult = await pool.query(`
       SELECT *
       FROM task_completions
-      WHERE id = ?
-    `).get(completion.id);
+      WHERE id = $1
+    `, [completion.id]);
 
     res.json({
-      completion: updated,
+      completion: updatedResult.rows[0],
       verification: {
         status: verification.status,
         reason: verification.reason,
         confidence: verification.confidence
       }
     });
-
   } catch (error) {
+    if (client) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        console.error('Task submission rollback failed:', rollbackError);
+      }
+    }
+
     next(error);
+  } finally {
+    if (client) {
+      client.release();
+    }
   }
 });
 
