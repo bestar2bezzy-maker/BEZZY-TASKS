@@ -88,11 +88,11 @@ router.get('/history/me', async (req, res, next) => {
   }
 });
 
-router.get('/:id', (req, res, next) => {
+router.get('/:id', async (req, res, next) => {
   try {
-    const db = getDb();
+    const pool = getPostgresPool();
 
-    const task = db.prepare(`
+    const result = await pool.query(`
       SELECT
         id,
         title,
@@ -102,8 +102,10 @@ router.get('/:id', (req, res, next) => {
         status,
         created_at
       FROM tasks
-      WHERE id = ?
-    `).get(req.params.id);
+      WHERE id = $1
+    `, [req.params.id]);
+
+    const task = result.rows[0];
 
     if (!task) {
       return res.status(404).json({
