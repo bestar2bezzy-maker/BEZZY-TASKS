@@ -1,24 +1,25 @@
+
 /*
  * ============================================================
  * BEZZY TASKS
- * V33.7
- * ÉVALUATION MENSUELLE DES RÔLES
+ * V33.8
+ * ÉVALUATION MENSUELLE DES TITRES
+ * POSTGRESQL
  * ============================================================
  *
- * Ce service prépare et enregistre l'évaluation mensuelle
- * d'un membre.
+ * Ce service évalue la progression d'un membre.
  *
- * IMPORTANT :
- * Il ne modifie jamais directement le rôle de l'utilisateur.
+ * Il utilise progression_title et ne modifie jamais
+ * users.role ni users.staff_role.
  *
- * Le changement de rôle sera appliqué au début du mois suivant.
+ * Le changement de titre est appliqué séparément.
  *
  * ============================================================
  */
 
 const crypto = require('crypto');
 
-const { getDb } = require('../config/database');
+const { getPostgresPool } = require('../config/postgres');
 
 const {
   buildRoleEvaluation
@@ -27,18 +28,7 @@ const {
 
 /*
  * ============================================================
- * OUTILS
- * ============================================================
- */
-
-function getDatabase() {
-  return getDb();
-}
-
-
-/*
- * ============================================================
- * NORMALISATION DU RÔLE
+ * NORMALISATION DU TITRE
  * ============================================================
  */
 
@@ -51,41 +41,7 @@ function normalizeRole(role) {
 
 /*
  * ============================================================
- * RÉCUPÉRER UN UTILISATEUR
- * ============================================================
- */
-
-function getUser(userId) {
-  if (!userId) {
-    return null;
-  }
-
-  const db = getDatabase();
-
-  return db.prepare(`
-    SELECT
-      id,
-      role,
-      status,
-      email_verified_at
-    FROM users
-    WHERE id = ?
-    LIMIT 1
-  `).get(userId);
-}
-
-
-/*
- * ============================================================
  * DÉTERMINER LA DÉCISION
- * ============================================================
- *
- * La décision distingue :
- *
- * - le maintien mensuel ;
- * - la promotion ;
- * - l'absence de décision de rétrogradation.
- *
  * ============================================================
  */
 
@@ -96,8 +52,7 @@ function determineDecision({
   promotionTargetRole,
   demotionTargetRole
 }) {
-  const normalizedRole =
-    normalizeRole(role);
+  const normalizedRole = normalizeRole(role);
 
   if (
     promotionThresholdReached &&
@@ -131,7 +86,7 @@ function determineDecision({
     nextRole: null
   };
 }
-  
+
 
 /*
  * ============================================================
@@ -139,7 +94,7 @@ function determineDecision({
  * ============================================================
  */
 
-function evaluateUserMonthly(
+async function evaluateUserMonthly(
   userId,
   evaluationYear,
   evaluationMonth
@@ -160,28 +115,38 @@ function evaluateUserMonthly(
     throw new Error('INVALID_EVALUATION_PERIOD');
   }
 
-  const db = getDatabase();
+  const pool = getPostgresPool();
 
-  const user = getUser(userId);
+  const userResult = await pool.query(`
+    SELECT
+      id,
+      progression_title,
+      status,
+      email_verified_at
+    FROM users
+    WHERE id = $1
+    LIMIT 1
+  `, [userId]);
+
+  const user = userResult.rows[0];
 
   if (!user) {
     throw new Error('USER_NOT_FOUND');
   }
 
-  const role = normalizeRole(user.role);
-  const evaluation =
-    buildRoleEvaluation(
-      user.id,
-      role
-    );
+  const title = normalizeRole(user.progression_title);
+
+  const evaluation = await buildRoleEvaluation(
+    user.id,
+    title
+  );
 
   if (!evaluation) {
     throw new Error('ROLE_PROGRESSION_CONFIG_NOT_FOUND');
   }
 
-  const decision =
-  determineDecision({
-    role,
+  const decision = determineDecision({
+    role: title,
 
     monthlyQuotaReached:
       evaluation.monthlyQuotaReached,
@@ -195,14 +160,13 @@ function evaluateUserMonthly(
     demotionTargetRole:
       evaluation.demotionTargetRole
   });
-  const performanceId =
-    crypto.randomUUID();
 
-  const now =
-    new Date().toISOString();
+  const performanceId = crypto.randomUUID();
 
-  db.prepare(`
-    INSERT OR REPLACE INTO role_monthly_performance (
+  const now = new Date().toISOString();
+
+  const result = await pool.query(`
+    INSERT INTO role_monthly_performance (
       id,
       user_id,
       role_at_evaluation,
@@ -217,14 +181,33 @@ function evaluateUserMonthly(
       next_role,
       evaluated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+    VALUES (
+      $1, $2, $3, $4, $5, $6, $7,
+      $8, $9, $10, $11, $12, $13
+    )
+    ON CONFLICT (
+      user_id,
+      evaluation_year,
+      evaluation_month
+    )
+    DO UPDATE SET
+      role_at_evaluation = EXCLUDED.role_at_evaluation,
+      active_referred_users = EXCLUDED.active_referred_users,
+      required_active_users = EXCLUDED.required_active_users,
+      bezzy_score = EXCLUDED.bezzy_score,
+      quota_reached = EXCLUDED.quota_reached,
+      anti_fraud_passed = EXCLUDED.anti_fraud_passed,
+      decision = EXCLUDED.decision,
+      next_role = EXCLUDED.next_role,
+      evaluated_at = EXCLUDED.evaluated_at
+    RETURNING id
+  `, [
     performanceId,
     user.id,
-    role,
+    title,
     year,
     month,
-        evaluation.activeReferredUsers,
+    evaluation.activeReferredUsers,
     evaluation.monthlyRequiredUsers,
     0,
     evaluation.monthlyQuotaReached ? 1 : 0,
@@ -232,14 +215,14 @@ function evaluateUserMonthly(
     decision.decision,
     decision.nextRole,
     now
-  );
+  ]);
 
   return {
-    id: performanceId,
+    id: result.rows[0].id,
 
     userId: user.id,
 
-    roleAtEvaluation: role,
+    roleAtEvaluation: title,
 
     evaluationYear: year,
 
@@ -249,18 +232,17 @@ function evaluateUserMonthly(
       evaluation.activeReferredUsers,
 
     monthlyRequiredUsers:
-  evaluation.monthlyRequiredUsers,
+      evaluation.monthlyRequiredUsers,
 
-monthlyQuotaReached:
-  evaluation.monthlyQuotaReached,
+    monthlyQuotaReached:
+      evaluation.monthlyQuotaReached,
 
-promotionThresholdReached:
-  evaluation.promotionThresholdReached,
-    decision:
-      decision.decision,
+    promotionThresholdReached:
+      evaluation.promotionThresholdReached,
 
-    nextRole:
-      decision.nextRole
+    decision: decision.decision,
+
+    nextRole: decision.nextRole
   };
 }
 
@@ -275,3 +257,4 @@ module.exports = {
   evaluateUserMonthly,
   determineDecision
 };
+  
