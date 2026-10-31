@@ -218,6 +218,7 @@ router.post('/partner-event', async (req, res, next) => {
     // Enregistrer l'événement dans Neon.
     const verificationEventId = crypto.randomUUID();
 
+   
     const eventInsert = await client.query(
       `
         INSERT INTO task_verification_events (
@@ -229,9 +230,10 @@ router.post('/partner-event', async (req, res, next) => {
           external_event_id,
           event_type,
           payload_json,
+          signature,
           verification_status
         )
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
         ON CONFLICT DO NOTHING
       `,
       [
@@ -243,10 +245,11 @@ router.post('/partner-event', async (req, res, next) => {
         externalEventId,
         eventType,
         JSON.stringify(body),
+        String(req.headers['x-bezzy-signature'] || '').trim(),
         verification.status
       ]
     );
-
+    
     // Un autre webhook a déjà enregistré cet événement.
     if (eventInsert.rowCount === 0) {
       await client.query('ROLLBACK');
