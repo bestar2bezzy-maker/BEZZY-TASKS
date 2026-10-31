@@ -1,38 +1,41 @@
+
 const express = require('express');
-const { getDb } = require('../config/database');
+const { getPostgresPool } = require('../config/postgres');
+const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
 
-router.use((req, res, next) => {
-  const { requireAuth } = require('../middleware/auth');
-  requireAuth(req, res, next);
-});
+router.use(requireAuth);
 
-router.get('/balance', (req, res, next) => {
+// SOLDE DU PORTEFEUILLE
+router.get('/balance', async (req, res, next) => {
   try {
-    const db = getDb();
+    const pool = getPostgresPool();
 
-    const entries = db.prepare(`
+    const result = await pool.query(`
       SELECT
-  amount_minor,
-  direction,
-  currency
-FROM ledger_entries
-WHERE user_id = ?
-    `).all(req.user.sub);
+        currency,
+        COALESCE(
+          SUM(
+            CASE
+              WHEN direction = 'DEBIT' THEN -amount_minor
+              ELSE amount_minor
+            END
+          ),
+          0
+        ) AS balance
+      FROM ledger_entries
+      WHERE user_id = $1
+      GROUP BY currency
+    `, [req.user.sub]);
 
     const balances = {};
 
-    for (const entry of entries) {
-      const currency = entry.currency || 'XAF';
-      const amount = Number(entry.amount_minor || 0);
-const signedAmount = entry.direction === 'DEBIT' ? -amount : amount;
-
-balances[currency] =
-  (balances[currency] || 0) + signedAmount;
+    for (const row of result.rows) {
+      balances[row.currency || 'XAF'] = Number(row.balance || 0);
     }
 
-    res.json({
+    return res.json({
       user_id: req.user.sub,
       balances
     });
@@ -41,27 +44,33 @@ balances[currency] =
   }
 });
 
-router.get('/ledger', (req, res, next) => {
+// HISTORIQUE DU PORTEFEUILLE
+router.get('/ledger', async (req, res, next) => {
   try {
-    const db = getDb();
+    const pool = getPostgresPool();
 
-    const entries = db.prepare(`
-     SELECT
-  id,
-  entry_type AS type,
-  amount_minor AS amount,
-  currency,
-  reference_type,
-  reference_id,
-  idempotency_key,
-  created_at
-FROM ledger_entries 
-      WHERE user_id = ?
-      ORDER BY id DESC
-    `).all(req.user.sub);
+    const result = await pool.query(`
+      SELECT
+        id,
+        entry_type AS type,
+        amount_minor AS amount,
+        currency,
+        direction,
+        reference_type,
+        reference_id,
+        idempotency_key,
+        created_at
+      FROM ledger_entries
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+      LIMIT 500
+    `, [req.user.sub]);
 
-    res.json({
-      entries
+    return res.json({
+      entries: result.rows.map(entry => ({
+        ...entry,
+        amount: Number(entry.amount)
+      }))
     });
   } catch (error) {
     next(error);
@@ -69,3 +78,4 @@ FROM ledger_entries
 });
 
 module.exports = router;
+      
