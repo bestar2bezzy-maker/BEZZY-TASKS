@@ -3,6 +3,8 @@ const crypto = require('crypto');
 
 const { getDb } = require('../config/database');
 
+const { getPostgresPool } = require('../config/postgres');
+
 const router = express.Router();
 
 
@@ -476,25 +478,15 @@ router.get('/conversions', (req, res) => {
 
 /*
  * ============================================================
- * LISTE DES DEMANDES DE RETRAIT
+ * LISTE DES DEMANDES DE RETRAIT - POSTGRESQL
  * ============================================================
- *
- * GET /api/admin/payout-requests
  */
 
-router.get('/payout-requests', (req, res, next) => {
-
+router.get('/payout-requests', async (req, res, next) => {
   try {
+    const pool = getPostgresPool();
 
-    const db = getDb();
-
-
-    /*
-     * La table payout_requests est créée par
-     * le module payout lorsqu'elle est nécessaire.
-     */
-
-    const rows = db.prepare(`
+    const result = await pool.query(`
       SELECT
         pr.id,
         pm.name AS method,
@@ -508,49 +500,21 @@ router.get('/payout-requests', (req, res, next) => {
         u.phone AS user_phone,
         u.country_code AS user_country
       FROM payout_requests pr
-      JOIN payout_methods pm
-        ON pm.id = pr.method_id
-      JOIN users u
-        ON u.id = pr.user_id
-      ORDER BY pr.id DESC
+      JOIN payout_methods pm ON pm.id = pr.method_id
+      JOIN users u ON u.id = pr.user_id
+      ORDER BY pr.created_at DESC
       LIMIT 200
-    `).all();
+    `);
 
-
-    const result = rows.map(row => ({
-      id: row.id,
-      method: row.method,
-      account: row.account,
-      amount: Number(row.amount || 0),
-      fee: Number(row.fee || 0),
-      net_amount: Number(row.net_amount || 0),
-      currency: row.currency,
+    return res.json(result.rows.map(row => ({
+      ...row,
+      amount: Number(row.amount),
+      fee: Number(row.fee),
+      net_amount: Number(row.net_amount),
       status: String(row.status || '').toLowerCase(),
-      created_at: row.created_at,
-      user_phone: row.user_phone,
-      user_country: row.user_country,
       provider_reference: ''
-    }));
-
-
-    return res.json(result);
-
+    })));
   } catch (error) {
-
-    /*
-     * Si le système de retrait n'a encore jamais été
-     * initialisé, on retourne simplement une liste vide.
-     */
-
-    if (
-      /no such table/i.test(
-        String(error.message || '')
-      )
-    ) {
-      return res.json([]);
-    }
-
-
     next(error);
   }
 });
@@ -558,129 +522,167 @@ router.get('/payout-requests', (req, res, next) => {
 
 /*
  * ============================================================
- * MODIFIER LE STATUT D'UNE DEMANDE DE RETRAIT
+ * MODIFIER LE STATUT D'UN RETRAIT - POSTGRESQL
  * ============================================================
- *
- * PATCH /api/admin/payout-requests/:id
  */
 
-router.patch(
-  '/payout-requests/:id',
-  (req, res, next) => {
+router.patch('/payout-requests/:id', async (req, res, next) => {
+  const pool = getPostgresPool();
+  let client;
 
-    try {
+  try {
+    const requestedStatus = String(
+      req.body?.status || ''
+    ).trim().toUpperCase();
 
-      const db = getDb();
+    const allowedStatuses = [
+      'PENDING',
+      'APPROVED',
+      'PAID',
+      'REJECTED'
+    ];
 
+    if (!allowedStatuses.includes(requestedStatus)) {
+      return res.status(400).json({
+        error: 'INVALID_STATUS',
+        message: 'Statut de retrait invalide.'
+      });
+    }
 
-      const requestedStatus =
-        String(
-          req.body?.status || ''
-        )
-          .trim()
-          .toUpperCase();
+    client = await pool.connect();
+    await client.query('BEGIN');
 
+    const result = await client.query(`
+      SELECT *
+      FROM payout_requests
+      WHERE id = $1
+      FOR UPDATE
+    `, [req.params.id]);
 
-      /*
-       * Statuts autorisés.
-       */
+    const payout = result.rows[0];
 
-      const allowedStatuses = new Set([
-        'PENDING',
-        'APPROVED',
-        'PAID',
-        'REJECTED'
-      ]);
+    if (!payout) {
+      await client.query('ROLLBACK');
 
+      return res.status(404).json({
+        error: 'PAYOUT_NOT_FOUND',
+        message: 'Demande de retrait introuvable.'
+      });
+    }
 
-      if (
-        !allowedStatuses.has(
-          requestedStatus
-        )
-      ) {
+    const previousStatus = String(payout.status).toUpperCase();
 
-        return res.status(400).json({
-          error: 'INVALID_STATUS',
-          message:
-            'Invalid payout request status'
-        });
-
-      }
-
-
-      /*
-       * Vérification de l'existence
-       * de la demande.
-       */
-
-      const existing =
-        db.prepare(`
-          SELECT
-            id,
-            status
-          FROM payout_requests
-          WHERE id = ?
-          LIMIT 1
-        `).get(req.params.id);
-
-
-      if (!existing) {
-
-        return res.status(404).json({
-          error: 'PAYOUT_NOT_FOUND',
-          message:
-            'Payout request not found'
-        });
-
-      }
-
-
-      /*
-       * Mise à jour du statut.
-       */
-
-      db.prepare(`
-        UPDATE payout_requests
-        SET status = ?
-        WHERE id = ?
-      `).run(
-        requestedStatus,
-        req.params.id
-      );
-
+    /*
+     * Une demande déjà dans le statut demandé
+     * ne doit pas être traitée une seconde fois.
+     */
+    if (previousStatus === requestedStatus) {
+      await client.query('COMMIT');
 
       return res.json({
         success: true,
-        id: req.params.id,
-        previous_status:
-          existing.status,
-        status:
-          requestedStatus
+        id: payout.id,
+        previous_status: previousStatus,
+        status: requestedStatus
       });
+    }
 
-    } catch (error) {
+    /*
+     * Les demandes payées ou rejetées sont définitives.
+     */
+    if (['PAID', 'REJECTED'].includes(previousStatus)) {
+      await client.query('ROLLBACK');
 
-      if (
-        /no such table/i.test(
-          String(error.message || '')
+      return res.status(409).json({
+        error: 'PAYOUT_ALREADY_FINAL',
+        message: 'Cette demande possède déjà un statut définitif.'
+      });
+    }
+
+    /*
+     * Un paiement doit obligatoirement être approuvé avant.
+     */
+    if (
+      requestedStatus === 'PAID' &&
+      previousStatus !== 'APPROVED'
+    ) {
+      await client.query('ROLLBACK');
+
+      return res.status(409).json({
+        error: 'PAYOUT_NOT_APPROVED',
+        message: 'La demande doit être approuvée avant son paiement.'
+      });
+    }
+
+    /*
+     * Remboursement automatique en cas de rejet.
+     * La clé unique empêche tout double remboursement.
+     */
+    if (requestedStatus === 'REJECTED') {
+      await client.query(`
+        INSERT INTO ledger_entries (
+          id,
+          user_id,
+          entry_type,
+          direction,
+          amount_minor,
+          currency,
+          reference_type,
+          reference_id,
+          idempotency_key,
+          metadata_json
         )
-      ) {
+        VALUES (
+          $1, $2, 'PAYOUT_REFUND', 'CREDIT',
+          $3, $4, 'PAYOUT', $5, $6, $7
+        )
+        ON CONFLICT (idempotency_key) DO NOTHING
+      `, [
+        crypto.randomUUID(),
+        payout.user_id,
+        payout.amount,
+        payout.currency,
+        String(payout.id),
+        `payout-refund:${payout.id}`,
+        JSON.stringify({
+          reason: 'PAYOUT_REJECTED'
+        })
+      ]);
+    }
 
-        return res.status(404).json({
-          error: 'PAYOUT_NOT_FOUND',
-          message:
-            'Payout request not found'
-        });
+    await client.query(`
+      UPDATE payout_requests
+      SET status = $1
+      WHERE id = $2
+    `, [
+      requestedStatus,
+      payout.id
+    ]);
 
-      }
+    await client.query('COMMIT');
 
+    return res.json({
+      success: true,
+      id: payout.id,
+      previous_status: previousStatus,
+      status: requestedStatus
+    });
 
-      next(error);
+  } catch (error) {
+    if (client) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (_) {}
+    }
+
+    next(error);
+  } finally {
+    if (client) {
+      client.release();
     }
   }
-);
-
-
+});
+  
 /*
  * ============================================================
  * VERIFICATION RAPIDE DU ROUTEUR ADMIN
