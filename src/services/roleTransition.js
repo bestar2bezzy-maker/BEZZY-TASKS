@@ -1,36 +1,28 @@
+
 /*
  * ============================================================
  * BEZZY TASKS
- * V33.7
- * APPLICATION DES TRANSITIONS DE RÔLE
+ * V33.8
+ * APPLICATION DES TRANSITIONS DE TITRES
+ * POSTGRESQL
  * ============================================================
  *
- * Ce service applique les décisions enregistrées par le moteur
- * d'évaluation mensuelle.
+ * Ce service applique les promotions enregistrées.
  *
- * IMPORTANT :
- * Une décision du mois M est appliquée au début du mois M+1.
+ * Il modifie uniquement progression_title.
+ * Il ne modifie jamais users.role ni users.staff_role.
+ *
+ * Une décision du mois M est appliquée au début de M+1.
  *
  * ============================================================
  */
 
-const { getDb } = require('../config/database');
+const { getPostgresPool } = require('../config/postgres');
 
 
 /*
  * ============================================================
- * OUTILS
- * ============================================================
- */
-
-function getDatabase() {
-  return getDb();
-}
-
-
-/*
- * ============================================================
- * NORMALISATION DU RÔLE
+ * NORMALISATION
  * ============================================================
  */
 
@@ -43,7 +35,7 @@ function normalizeRole(role) {
 
 /*
  * ============================================================
- * VÉRIFIER LA TRANSITION
+ * VÉRIFIER UNE TRANSITION
  * ============================================================
  */
 
@@ -66,75 +58,60 @@ function isValidRoleTransition(currentRole, nextRole) {
  * ============================================================
  * APPLIQUER UNE DÉCISION
  * ============================================================
- *
- * La fonction reçoit l'évaluation d'un mois terminé.
- *
- * Elle vérifie ensuite que la transition est autorisée avant
- * de modifier le rôle.
- *
- * ============================================================
  */
-function applyRoleTransition(performanceId) {
+
+async function applyRoleTransition(performanceId) {
   if (!performanceId) {
     throw new Error('PERFORMANCE_ID_REQUIRED');
   }
 
-  const db = getDatabase();
-  const performance = db.prepare(`
-    SELECT
-      id,
-      user_id,
-      role_at_evaluation,
-      evaluation_year,
-      evaluation_month,
-      decision,
-      next_role,
-      applied_at
-    FROM role_monthly_performance
-    WHERE id = ?
-    LIMIT 1
-  `).get(performanceId);
+  const pool = getPostgresPool();
+  const client = await pool.connect();
 
-  if (!performance) {
-    throw new Error('PERFORMANCE_NOT_FOUND');
-  }
+  try {
+    await client.query('BEGIN');
 
-if (performance.applied_at) {
-  return {
-    applied: false,
-    reason: 'ROLE_TRANSITION_ALREADY_APPLIED',
-    performanceId: performance.id,
-    userId: performance.user_id,
-    appliedAt: performance.applied_at
-  };
-}
-  
-  /*
-   * Seules les décisions PROMOTE sont appliquées
-   * par cette première version.
-   */
+    const performanceResult = await client.query(`
+      SELECT
+        id,
+        user_id,
+        role_at_evaluation,
+        evaluation_year,
+        evaluation_month,
+        decision,
+        next_role,
+        applied_at
+      FROM role_monthly_performance
+      WHERE id = $1
+      LIMIT 1
+      FOR UPDATE
+    `, [performanceId]);
 
-    /*
-   * ============================================================
-   * VERROU TEMPOREL
-   * ============================================================
-   *
-   * Une décision du mois M ne peut être appliquée
-   * qu'à partir du premier jour du mois M+1.
-   *
-   * ============================================================
-   */
+    const performance = performanceResult.rows[0];
 
-  const now = new Date();
+    if (!performance) {
+      throw new Error('PERFORMANCE_NOT_FOUND');
+    }
 
-  const evaluationYear =
-    Number(performance.evaluation_year);
+    if (performance.applied_at) {
+      await client.query('COMMIT');
 
-  const evaluationMonth =
-    Number(performance.evaluation_month);
+      return {
+        applied: false,
+        reason: 'ROLE_TRANSITION_ALREADY_APPLIED',
+        performanceId: performance.id,
+        userId: performance.user_id,
+        appliedAt: performance.applied_at
+      };
+    }
 
-  const nextMonthStart =
-    new Date(
+    const evaluationYear =
+      Number(performance.evaluation_year);
+
+    const evaluationMonth =
+      Number(performance.evaluation_month);
+
+    const nextMonthStart = new Date(
       evaluationMonth === 12
         ? evaluationYear + 1
         : evaluationYear,
@@ -148,119 +125,106 @@ if (performance.applied_at) {
       0
     );
 
-  if (now < nextMonthStart) {
-    throw new Error(
-      'ROLE_TRANSITION_NOT_YET_AVAILABLE'
-    );
-  }
-  
-  if (performance.decision !== 'PROMOTE') {
+    if (new Date() < nextMonthStart) {
+      throw new Error('ROLE_TRANSITION_NOT_YET_AVAILABLE');
+    }
+
+    if (performance.decision !== 'PROMOTE') {
+      await client.query('COMMIT');
+
+      return {
+        applied: false,
+        reason: 'NO_PROMOTION_REQUIRED',
+        performanceId: performance.id,
+        userId: performance.user_id
+      };
+    }
+
+    if (!performance.next_role) {
+      throw new Error('NEXT_ROLE_MISSING');
+    }
+
+    const currentRole =
+      normalizeRole(performance.role_at_evaluation);
+
+    const nextRole =
+      normalizeRole(performance.next_role);
+
+    if (!isValidRoleTransition(currentRole, nextRole)) {
+      throw new Error('INVALID_ROLE_TRANSITION');
+    }
+
+    const userResult = await client.query(`
+      SELECT
+        id,
+        progression_title
+      FROM users
+      WHERE id = $1
+      LIMIT 1
+      FOR UPDATE
+    `, [performance.user_id]);
+
+    const user = userResult.rows[0];
+
+    if (!user) {
+      throw new Error('USER_NOT_FOUND');
+    }
+
+    const actualRole =
+      normalizeRole(user.progression_title);
+
+    if (actualRole !== currentRole) {
+      await client.query('COMMIT');
+
+      return {
+        applied: false,
+        reason: 'ROLE_ALREADY_CHANGED',
+        performanceId: performance.id,
+        userId: performance.user_id,
+        currentRole: actualRole,
+        expectedRole: currentRole
+      };
+    }
+
+    await client.query(`
+      UPDATE users
+      SET progression_title = $1
+      WHERE id = $2
+    `, [
+      nextRole,
+      performance.user_id
+    ]);
+
+    const appliedAt = new Date().toISOString();
+
+    await client.query(`
+      UPDATE role_monthly_performance
+      SET applied_at = $1
+      WHERE id = $2
+        AND applied_at IS NULL
+    `, [
+      appliedAt,
+      performance.id
+    ]);
+
+    await client.query('COMMIT');
+
     return {
-      applied: false,
-      reason: 'NO_PROMOTION_REQUIRED',
-      performanceId: performance.id,
-      userId: performance.user_id
-    };
-  }
-
-  if (!performance.next_role) {
-    throw new Error('NEXT_ROLE_MISSING');
-  }
-
-  const currentRole =
-    normalizeRole(performance.role_at_evaluation);
-
-  const nextRole =
-    normalizeRole(performance.next_role);
-
-  /*
-   * Sécurité :
-   * aucune transition arbitraire n'est autorisée.
-   */
-  if (
-    !isValidRoleTransition(
-      currentRole,
-      nextRole
-    )
-  ) {
-    throw new Error('INVALID_ROLE_TRANSITION');
-  }
-
-  /*
-   * Vérifier le rôle actuel avant modification.
-   *
-   * Cela évite d'écraser une modification effectuée
-   * entre-temps par un administrateur.
-   */
-  const user = db.prepare(`
-    SELECT
-      id,
-      role
-    FROM users
-    WHERE id = ?
-    LIMIT 1
-  `).get(performance.user_id);
-
-  if (!user) {
-    throw new Error('USER_NOT_FOUND');
-  }
-
-  const actualRole =
-    normalizeRole(user.role);
-
-  if (actualRole !== currentRole) {
-    return {
-      applied: false,
-      reason: 'ROLE_ALREADY_CHANGED',
+      applied: true,
       performanceId: performance.id,
       userId: performance.user_id,
-      currentRole: actualRole,
-      expectedRole: currentRole
+      previousRole: currentRole,
+      newRole: nextRole,
+      appliedAt
     };
+
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+
+  } finally {
+    client.release();
   }
-
-  /*
-   * Application de la transition.
-   */
-  const result = db.prepare(`
-    UPDATE users
-    SET role = ?
-    WHERE id = ?
-      AND role = ?
-  `).run(
-    nextRole,
-    performance.user_id,
-    currentRole
-  );
-
-if (result.changes === 1) {
-  db.prepare(`
-    UPDATE role_monthly_performance
-    SET applied_at = ?
-    WHERE id = ?
-      AND applied_at IS NULL
-  `).run(
-    new Date().toISOString(),
-    performance.id
-  );
-}
-  
-  if (result.changes !== 1) {
-    return {
-      applied: false,
-      reason: 'ROLE_UPDATE_FAILED',
-      performanceId: performance.id,
-      userId: performance.user_id
-    };
-  }
-
-  return {
-    applied: true,
-    performanceId: performance.id,
-    userId: performance.user_id,
-    previousRole: currentRole,
-    newRole: nextRole
-  };
 }
 
 
@@ -268,18 +232,9 @@ if (result.changes === 1) {
  * ============================================================
  * APPLIQUER LES TRANSITIONS D'UNE PÉRIODE
  * ============================================================
- *
- * Exemple :
- *
- * applyMonthlyRoleTransitions(2026, 9)
- *
- * applique les décisions prises pour septembre 2026,
- * donc destinées à prendre effet en octobre 2026.
- *
- * ============================================================
  */
 
-function applyMonthlyRoleTransitions(
+async function applyMonthlyRoleTransitions(
   evaluationYear,
   evaluationMonth
 ) {
@@ -295,29 +250,32 @@ function applyMonthlyRoleTransitions(
     throw new Error('INVALID_EVALUATION_PERIOD');
   }
 
-  const db = getDatabase();
+  const pool = getPostgresPool();
 
-  const performances = db.prepare(`
+  const performancesResult = await pool.query(`
     SELECT id
     FROM role_monthly_performance
-    WHERE evaluation_year = ?
-      AND evaluation_month = ?
+    WHERE evaluation_year = $1
+      AND evaluation_month = $2
       AND decision = 'PROMOTE'
+      AND applied_at IS NULL
     ORDER BY created_at ASC
-  `).all(
+  `, [
     year,
     month
-  );
+  ]);
 
+  const performances = performancesResult.rows;
   const results = [];
 
   for (const performance of performances) {
     try {
-      results.push(
-        applyRoleTransition(
-          performance.id
-        )
+      const result = await applyRoleTransition(
+        performance.id
       );
+
+      results.push(result);
+
     } catch (error) {
       results.push({
         applied: false,
@@ -347,4 +305,4 @@ module.exports = {
   applyRoleTransition,
   applyMonthlyRoleTransitions
 };
- 
+  
