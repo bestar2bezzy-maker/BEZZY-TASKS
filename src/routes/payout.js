@@ -1,210 +1,95 @@
+
 const express = require('express');
 const crypto = require('crypto');
-const { getDb } = require('../config/database');
+const { getPostgresPool } = require('../config/postgres');
 const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
 
 router.use(requireAuth);
 
-const METHOD_SEEDS = [
-  {
-    country_code: 'CG',
-    code: 'MTN_MOMO',
-    name: 'MTN MoMo',
-    currency: 'XAF',
-    min_amount: 1000,
-    max_amount: 10000
-  },
-  {
-    country_code: 'CG',
-    code: 'AIRTEL_MONEY',
-    name: 'Airtel Money',
-    currency: 'XAF',
-    min_amount: 1000,
-    max_amount: 10000
+function calculateFee(amount, method) {
+  let fee =
+    Number(method.fixed_fee || 0) +
+    Math.ceil(
+      amount * Number(method.fee_rate_bps || 0) / 10000
+    );
+
+  fee = Math.max(fee, Number(method.min_fee || 0));
+
+  if (method.max_fee !== null && method.max_fee !== undefined) {
+    fee = Math.min(fee, Number(method.max_fee));
   }
-];
 
-function ensurePayoutTables(db) {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS payout_methods (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      country_code TEXT NOT NULL,
-      code TEXT NOT NULL UNIQUE,
-      name TEXT NOT NULL,
-      currency TEXT NOT NULL,
-      min_amount INTEGER NOT NULL DEFAULT 1000,
-      max_amount INTEGER NOT NULL DEFAULT 10000,
-      active INTEGER NOT NULL DEFAULT 1
-    );
-
-    CREATE TABLE IF NOT EXISTS payout_requests (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id TEXT NOT NULL,
-      method_id INTEGER NOT NULL,
-      account TEXT NOT NULL,
-      amount INTEGER NOT NULL,
-      fee INTEGER NOT NULL,
-      net_amount INTEGER NOT NULL,
-      currency TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'PENDING',
-      idempotency_key TEXT NOT NULL UNIQUE,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_payout_requests_user_created
-      ON payout_requests(user_id, created_at);
-  `);
-
-  /*
-   * Compatibilité avec une éventuelle ancienne table
-   * créée avant l'ajout des limites.
-   */
-  try {
-    db.exec(`
-      ALTER TABLE payout_methods
-      ADD COLUMN min_amount INTEGER NOT NULL DEFAULT 1000
-    `);
-  } catch (_) {}
-
-  try {
-    db.exec(`
-      ALTER TABLE payout_methods
-      ADD COLUMN max_amount INTEGER NOT NULL DEFAULT 10000
-    `);
-  } catch (_) {}
-
-  const insert = db.prepare(`
-    INSERT OR IGNORE INTO payout_methods
-      (country_code, code, name, currency, min_amount, max_amount, active)
-    VALUES (?, ?, ?, ?, ?, ?, 1)
-  `);
-
-  for (const method of METHOD_SEEDS) {
-    insert.run(
-      method.country_code,
-      method.code,
-      method.name,
-      method.currency,
-      method.min_amount,
-      method.max_amount
-    );
-  }
+  return fee;
 }
-
-function getPrimaryCurrency(countryCode) {
-  const currencies = {
-    CG: 'XAF',
-    CD: 'CDF',
-    NG: 'NGN',
-    GH: 'GHS',
-    KE: 'KES',
-    US: 'USD',
-    FR: 'EUR'
-  };
-
-  return (
-    currencies[String(countryCode || '').toUpperCase()] ||
-    'XAF'
-  );
-}
-
-function calculateFee(amount) {
-  if (amount === 1000) return 50;
-  if (amount === 2000) return 100;
-  if (amount === 3000) return 300;
-  if (amount === 10000) return 1500;
-
-  return null;
-}
-
-function getBalance(db, userId, currency) {
-  const rows = db.prepare(`
-    SELECT direction, amount_minor
-    FROM ledger_entries
-    WHERE user_id = ? AND currency = ?
-  `).all(userId, currency);
-
-  return rows.reduce((total, row) => {
-    const amount = Number(row.amount_minor || 0);
-
-    return total +
-      (row.direction === 'DEBIT'
-        ? -amount
-        : amount);
-  }, 0);
-}
-
 
 /*
- * ============================================================
- * MOYENS DE PAIEMENT
- * ============================================================
+ * MOYENS DE PAIEMENT DU PAYS DE L'UTILISATEUR
  */
 
-router.get('/payout-methods', (req, res, next) => {
+router.get('/payout-methods', async (req, res, next) => {
   try {
-    const db = getDb();
+    const pool = getPostgresPool();
 
-    ensurePayoutTables(db);
+    const userResult = await pool.query(
+      `SELECT country_code FROM users WHERE id = $1`,
+      [req.user.sub]
+    );
 
-    const countryCode =
-      String(req.user.country_code || 'CG').toUpperCase();
+    const countryCode = String(
+      userResult.rows[0]?.country_code || req.user.country_code || ''
+    ).toUpperCase();
 
-    const currency =
-      getPrimaryCurrency(countryCode);
+    if (!countryCode) {
+      return res.status(400).json({
+        error: 'COUNTRY_NOT_CONFIGURED',
+        message: 'Votre pays doit être configuré sur votre compte.'
+      });
+    }
 
-    const methods = db.prepare(`
+    const result = await pool.query(`
       SELECT
         id,
+        country_code,
+        country_name,
         code,
         name,
         currency,
         min_amount,
-        max_amount
+        max_amount,
+        fixed_fee,
+        fee_rate_bps,
+        min_fee,
+        max_fee,
+        provider_type
       FROM payout_methods
-      WHERE country_code = ?
-        AND currency = ?
-        AND active = 1
+      WHERE country_code = $1
+        AND active = TRUE
       ORDER BY id ASC
-    `).all(
-      countryCode,
-      currency
-    );
+    `, [countryCode]);
 
     res.json({
-      country: {
-        code: countryCode,
-        currency
-      },
-
-      methods,
-
-      message: methods.length
+      country: { code: countryCode },
+      methods: result.rows,
+      message: result.rows.length
         ? null
         : 'Aucun moyen de paiement n’est encore configuré pour ce pays.'
     });
-
   } catch (error) {
     next(error);
   }
 });
 
-
 /*
- * ============================================================
  * HISTORIQUE DES RETRAITS
- * ============================================================
  */
 
-router.get('/payout-requests', (req, res, next) => {
+router.get('/payout-requests', async (req, res, next) => {
   try {
-    const db = getDb();
+    const pool = getPostgresPool();
 
-    ensurePayoutTables(db);
-
-    const rows = db.prepare(`
+    const result = await pool.query(`
       SELECT
         pr.id,
         pm.name AS method,
@@ -216,183 +101,179 @@ router.get('/payout-requests', (req, res, next) => {
         pr.status,
         pr.created_at
       FROM payout_requests pr
-      JOIN payout_methods pm
-        ON pm.id = pr.method_id
-      WHERE pr.user_id = ?
-      ORDER BY pr.id DESC
-    `).all(req.user.sub);
+      JOIN payout_methods pm ON pm.id = pr.method_id
+      WHERE pr.user_id = $1
+      ORDER BY pr.created_at DESC
+    `, [req.user.sub]);
 
-    res.json(rows);
-
+    res.json(result.rows);
   } catch (error) {
     next(error);
   }
 });
 
-
 /*
- * ============================================================
- * DEMANDE DE RETRAIT
- * ============================================================
+ * CREATION D'UNE DEMANDE DE RETRAIT
  */
 
-router.post('/payout-requests', (req, res, next) => {
+router.post('/payout-requests', async (req, res, next) => {
+  const pool = getPostgresPool();
+  let client;
+
   try {
-    const db = getDb();
-
-    ensurePayoutTables(db);
-
-    const countryCode =
-      String(req.user.country_code || 'CG').toUpperCase();
-
-    const currency =
-      getPrimaryCurrency(countryCode);
-
-    const methodId =
-      Number(req.body?.method_id);
-
-    const account =
-      String(req.body?.account || '').trim();
-
-    const amount =
-      Number(req.body?.amount);
-
-    const idempotencyKey =
-      String(
-        req.headers['idempotency-key'] ||
-        crypto.randomUUID()
-      );
-
+    const methodId = Number(req.body?.method_id);
+    const account = String(req.body?.account || '').trim();
+    const amount = Number(req.body?.amount);
+    const idempotencyKey = String(
+      req.headers['idempotency-key'] ||
+      req.body?.idempotency_key ||
+      crypto.randomUUID()
+    ).trim();
 
     if (
-      !Number.isInteger(methodId) ||
+      !Number.isSafeInteger(methodId) ||
+      methodId <= 0 ||
       !account ||
-      !Number.isFinite(amount)
+      !Number.isSafeInteger(amount) ||
+      amount <= 0 ||
+      !idempotencyKey ||
+      idempotencyKey.length > 200
     ) {
       return res.status(400).json({
         error: 'INVALID_PAYOUT',
-        message:
-          'Mode de paiement, compte et montant sont obligatoires.'
+        message: 'Mode de paiement, compte et montant valides obligatoires.'
       });
     }
 
+    client = await pool.connect();
+    await client.query('BEGIN');
 
-    if (
-      !Number.isInteger(amount) ||
-      amount < 1000 ||
-      amount > 10000
-    ) {
+    /*
+     * Verrouille le compte pour éviter deux retraits
+     * simultanés dépassant le solde disponible.
+     */
+    const userResult = await client.query(`
+      SELECT id, country_code
+      FROM users
+      WHERE id = $1
+      FOR UPDATE
+    `, [req.user.sub]);
+
+    const user = userResult.rows[0];
+
+    if (!user) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'USER_NOT_FOUND' });
+    }
+
+    const countryCode = String(user.country_code || '').toUpperCase();
+
+    if (!countryCode) {
+      await client.query('ROLLBACK');
       return res.status(400).json({
-        error: 'INVALID_AMOUNT',
-        message:
-          'Le retrait standard doit être compris entre 1 000 et 10 000 FCFA.'
+        error: 'COUNTRY_NOT_CONFIGURED'
       });
     }
 
+    /*
+     * Une clé déjà utilisée ne doit jamais créer
+     * un second retrait.
+     */
+    const existingResult = await client.query(`
+      SELECT id, status, amount, fee, net_amount, currency
+      FROM payout_requests
+      WHERE idempotency_key = $1
+        AND user_id = $2
+      LIMIT 1
+    `, [idempotencyKey, req.user.sub]);
 
-    const fee =
-      calculateFee(amount);
-
-
-    if (fee === null) {
-      return res.status(400).json({
-        error: 'UNSUPPORTED_AMOUNT',
-        message:
-          'Pour cette version, les montants disponibles sont 1 000, 2 000, 3 000 ou 10 000 FCFA.'
+    if (existingResult.rows.length) {
+      await client.query('COMMIT');
+      return res.json({
+        message: 'Demande déjà enregistrée.',
+        request: existingResult.rows[0]
       });
     }
 
-
-    const method = db.prepare(`
-      SELECT
-        id,
-        name,
-        currency,
-        min_amount,
-        max_amount
+    const methodResult = await client.query(`
+      SELECT *
       FROM payout_methods
-      WHERE id = ?
-        AND country_code = ?
-        AND currency = ?
-        AND active = 1
-    `).get(
-      methodId,
-      countryCode,
-      currency
-    );
+      WHERE id = $1
+        AND country_code = $2
+        AND active = TRUE
+      LIMIT 1
+    `, [methodId, countryCode]);
 
+    const method = methodResult.rows[0];
 
     if (!method) {
+      await client.query('ROLLBACK');
       return res.status(400).json({
         error: 'INVALID_METHOD',
-        message:
-          'Ce moyen de paiement n’est pas disponible dans votre pays.'
+        message: 'Ce moyen de paiement n’est pas disponible dans votre pays.'
       });
     }
-
 
     if (
-      amount < method.min_amount ||
-      amount > method.max_amount
+      amount < Number(method.min_amount) ||
+      amount > Number(method.max_amount)
     ) {
+      await client.query('ROLLBACK');
       return res.status(400).json({
-        error: 'INVALID_METHOD_AMOUNT',
-        message:
-          `Le montant doit être compris entre ${method.min_amount.toLocaleString('fr-FR')} et ${method.max_amount.toLocaleString('fr-FR')} ${currency}.`
+        error: 'INVALID_AMOUNT',
+        message: `Le montant doit être compris entre ${method.min_amount} et ${method.max_amount} ${method.currency}.`
       });
     }
 
+    const fee = calculateFee(amount, method);
+    const netAmount = amount - fee;
 
-    const existing = db.prepare(`
+    if (
+      !Number.isSafeInteger(fee) ||
+      fee < 0 ||
+      fee >= amount ||
+      netAmount <= 0
+    ) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: 'INVALID_PAYOUT_FEE',
+        message: 'Les frais configurés pour ce moyen de paiement sont invalides.'
+      });
+    }
+
+    /*
+     * Calcul du solde dans la devise du retrait.
+     */
+    const balanceResult = await client.query(`
       SELECT
-        id,
-        status,
-        amount,
-        fee,
-        net_amount,
-        currency
-      FROM payout_requests
-      WHERE idempotency_key = ?
-        AND user_id = ?
-    `).get(
-      idempotencyKey,
-      req.user.sub
-    );
+        COALESCE(
+          SUM(
+            CASE
+              WHEN direction = 'CREDIT' THEN amount_minor
+              ELSE -amount_minor
+            END
+          ),
+          0
+        ) AS balance
+      FROM ledger_entries
+      WHERE user_id = $1
+        AND currency = $2
+    `, [req.user.sub, method.currency]);
 
-
-    if (existing) {
-      return res.status(200).json({
-        message:
-          'Demande déjà enregistrée.',
-
-        request: existing
-      });
-    }
-
-
-    const balance =
-      getBalance(
-        db,
-        req.user.sub,
-        currency
-      );
-
+    const balance = Number(balanceResult.rows[0].balance || 0);
 
     if (balance < amount) {
+      await client.query('ROLLBACK');
       return res.status(400).json({
         error: 'INSUFFICIENT_BALANCE',
-
-        message:
-          `Solde insuffisant. Solde disponible : ${balance.toLocaleString('fr-FR')} ${currency}.`
+        message: `Solde insuffisant. Solde disponible : ${balance} ${method.currency}.`
       });
     }
 
-
-    const netAmount =
-      amount - fee;
-
-
-    const result = db.prepare(`
+    /*
+     * Enregistrement du retrait.
+     */
+    const requestResult = await client.query(`
       INSERT INTO payout_requests (
         user_id,
         method_id,
@@ -404,51 +285,88 @@ router.post('/payout-requests', (req, res, next) => {
         status,
         idempotency_key
       )
-      VALUES (
-        ?,
-        ?,
-        ?,
-        ?,
-        ?,
-        ?,
-        ?,
-        'PENDING',
-        ?
-      )
-    `).run(
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING', $8)
+      ON CONFLICT (idempotency_key) DO NOTHING
+      RETURNING *
+    `, [
       req.user.sub,
       method.id,
       account,
       amount,
       fee,
       netAmount,
-      currency,
+      method.currency,
       idempotencyKey
-    );
+    ]);
 
+    if (!requestResult.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        error: 'DUPLICATE_PAYOUT',
+        message: 'Cette demande a déjà été enregistrée.'
+      });
+    }
 
-    res.status(201).json({
+    const payout = requestResult.rows[0];
 
-      message:
-        `Demande enregistrée. Frais : ${fee.toLocaleString('fr-FR')} ${currency}. Montant à recevoir : ${netAmount.toLocaleString('fr-FR')} ${currency}.`,
+    /*
+     * Réservation du montant dans le ledger.
+     * Un rejet ultérieur donnera lieu à un remboursement.
+     */
+    await client.query(`
+      INSERT INTO ledger_entries (
+        id,
+        user_id,
+        entry_type,
+        direction,
+        amount_minor,
+        currency,
+        reference_type,
+        reference_id,
+        idempotency_key,
+        metadata_json
+      )
+      VALUES (
+        $1, $2, 'PAYOUT_REQUEST', 'DEBIT',
+        $3, $4, 'PAYOUT', $5, $6, $7
+      )
+    `, [
+      crypto.randomUUID(),
+      req.user.sub,
+      amount,
+      method.currency,
+      String(payout.id),
+      `payout-debit:${payout.id}`,
+      JSON.stringify({ method: method.code })
+    ]);
 
+    await client.query('COMMIT');
+
+    return res.status(201).json({
+      message: `Demande enregistrée. Frais : ${fee} ${method.currency}. Montant à recevoir : ${netAmount} ${method.currency}.`,
       request: {
-        id: result.lastInsertRowid,
+        id: payout.id,
         method: method.name,
         account,
         amount,
         fee,
         net_amount: netAmount,
-        currency,
+        currency: method.currency,
         status: 'PENDING'
       }
-
     });
-
   } catch (error) {
+    if (client) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (_) {}
+    }
+
     next(error);
+  } finally {
+    if (client) client.release();
   }
 });
 
-
 module.exports = router;
+                                     
