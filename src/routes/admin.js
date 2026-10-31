@@ -1,176 +1,137 @@
+
 const express = require('express');
 const crypto = require('crypto');
-
-const { getDb } = require('../config/database');
-
 const { getPostgresPool } = require('../config/postgres');
 
 const router = express.Router();
 
-
 /*
  * ============================================================
- * BEZZY TASKS
- * ROUTES ADMIN
- * V33.2.7
+ * BEZZY TASKS - ROUTES ADMIN
+ * POSTGRESQL
  * ============================================================
  *
- * Ce module est chargé par :
- *
- * src/routes/index.js
- *
- * sous :
- *
- * /api/admin
- *
- * L'authentification et les rôles sont gérés
- * par le routeur parent.
+ * Les authentifications et rôles sont gérés par le parent.
  */
 
-
-/*
- * ============================================================
- * OUTILS
- * ============================================================
- */
-
-function getBalance(db, userId) {
-  const row = db.prepare(`
-    SELECT
-      COALESCE(
-        SUM(
-          CASE
-            WHEN direction = 'CREDIT' THEN amount_minor
-            ELSE -amount_minor
-          END
-        ),
-        0
-      ) AS balance
+function getBalance(pool, userId) {
+  return pool.query(`
+    SELECT COALESCE(
+      SUM(
+        CASE
+          WHEN direction = 'CREDIT' THEN amount_minor
+          ELSE -amount_minor
+        END
+      ), 0
+    ) AS balance
     FROM ledger_entries
-    WHERE user_id = ?
-  `).get(userId);
-
-  return Number(row?.balance || 0);
+    WHERE user_id = $1
+  `, [userId]).then(result =>
+    Number(result.rows[0]?.balance || 0)
+  );
 }
-
 
 /*
  * ============================================================
  * STATISTIQUES ADMIN
- * ============================================================
- *
  * GET /api/admin/stats
+ * ============================================================
  */
 
-router.get('/stats', (req, res, next) => {
+router.get('/stats', async (req, res, next) => {
   try {
+    const pool = getPostgresPool();
 
-    const db = getDb();
-
-    const users = db.prepare(`
-      SELECT COUNT(*) AS count
-      FROM users
-    `).get().count;
-
-
-    const offers = db.prepare(`
-      SELECT COUNT(*) AS count
-      FROM tasks
-    `).get().count;
-
-
-    const active = db.prepare(`
-      SELECT COUNT(*) AS count
-      FROM tasks
-      WHERE status = 'ACTIVE'
-    `).get().count;
-
-
-    const countries = db.prepare(`
-      SELECT COUNT(DISTINCT country_code) AS count
-      FROM users
-      WHERE country_code IS NOT NULL
-    `).get().count;
-
-
-    const earned = db.prepare(`
+    const result = await pool.query(`
       SELECT
-        COALESCE(SUM(amount_minor), 0) AS total
-      FROM ledger_entries
-      WHERE direction = 'CREDIT'
-    `).get().total;
+        (SELECT COUNT(*) FROM users) AS users,
+        (SELECT COUNT(*) FROM tasks) AS offers,
+        (SELECT COUNT(*) FROM tasks WHERE status = 'ACTIVE') AS active,
+        (
+          SELECT COUNT(DISTINCT country_code)
+          FROM users
+          WHERE country_code IS NOT NULL
+        ) AS countries,
+        (
+          SELECT COALESCE(SUM(amount_minor), 0)
+          FROM ledger_entries
+          WHERE direction = 'CREDIT'
+        ) AS earned
+    `);
 
+    const stats = result.rows[0];
 
     return res.json({
-      users: Number(users || 0),
-      offers: Number(offers || 0),
-      active: Number(active || 0),
-      countries: Number(countries || 0),
-      earned: Number(earned || 0)
+      users: Number(stats.users || 0),
+      offers: Number(stats.offers || 0),
+      active: Number(stats.active || 0),
+      countries: Number(stats.countries || 0),
+      earned: Number(stats.earned || 0)
     });
-
   } catch (error) {
     next(error);
   }
 });
-
 
 /*
  * ============================================================
  * UTILISATEURS
- * ============================================================
- *
  * GET /api/admin/users
+ * ============================================================
  */
 
-router.get('/users', (req, res, next) => {
+router.get('/users', async (req, res, next) => {
   try {
+    const pool = getPostgresPool();
 
-    const db = getDb();
-
-    const users = db.prepare(`
+    const result = await pool.query(`
       SELECT
-        id,
-        email,
-        phone,
-        country_code,
-        role,
-        status,
-        created_at
-      FROM users
-      ORDER BY created_at DESC
+        u.id,
+        u.email,
+        u.phone,
+        u.country_code,
+        u.role,
+        u.status,
+        u.created_at,
+        COALESCE(b.balance, 0) AS balance
+      FROM users u
+      LEFT JOIN (
+        SELECT
+          user_id,
+          SUM(
+            CASE
+              WHEN direction = 'CREDIT' THEN amount_minor
+              ELSE -amount_minor
+            END
+          ) AS balance
+        FROM ledger_entries
+        GROUP BY user_id
+      ) b ON b.user_id = u.id
+      ORDER BY u.created_at DESC
       LIMIT 100
-    `).all();
+    `);
 
-
-    const result = users.map(user => ({
+    return res.json(result.rows.map(user => ({
       ...user,
-      balance: getBalance(db, user.id)
-    }));
-
-
-    return res.json(result);
-
+      balance: Number(user.balance || 0)
+    })));
   } catch (error) {
     next(error);
   }
 });
 
-
 /*
  * ============================================================
- * LISTE DES OFFRES / TÂCHES
- * ============================================================
- *
+ * LISTE DES OFFRES
  * GET /api/admin/offers
+ * ============================================================
  */
 
-router.get('/offers', (req, res, next) => {
+router.get('/offers', async (req, res, next) => {
   try {
+    const pool = getPostgresPool();
 
-    const db = getDb();
-
-    const rows = db.prepare(`
+    const result = await pool.query(`
       SELECT
         id,
         title,
@@ -182,10 +143,9 @@ router.get('/offers', (req, res, next) => {
         created_at
       FROM tasks
       ORDER BY created_at DESC
-    `).all();
+    `);
 
-
-    const offers = rows.map(row => ({
+    const offers = result.rows.map(row => ({
       id: row.id,
       title: row.title,
       description: row.description,
@@ -199,52 +159,30 @@ router.get('/offers', (req, res, next) => {
       created_at: row.created_at
     }));
 
-
     return res.json(offers);
-
   } catch (error) {
     next(error);
   }
 });
 
-
 /*
  * ============================================================
  * CREER UNE OFFRE
- * ============================================================
- *
  * POST /api/admin/offers
+ * ============================================================
  */
 
-router.post('/offers', (req, res, next) => {
+router.post('/offers', async (req, res, next) => {
   try {
+    const pool = getPostgresPool();
 
-    const db = getDb();
+    const title = String(req.body?.title || '').trim();
+    const description = String(req.body?.description || '').trim();
+    const reward = Number(req.body?.reward);
 
-
-    const title =
-      String(req.body?.title || '').trim();
-
-
-    const description =
-      String(req.body?.description || '').trim();
-
-
-    const reward =
-      Number(req.body?.reward);
-
-
-    const type =
-      String(
-        req.body?.type || 'OTHER'
-      )
-        .trim()
-        .toUpperCase();
-
-
-    /*
-     * Validation.
-     */
+    const type = String(
+      req.body?.type || 'OTHER'
+    ).trim().toUpperCase();
 
     if (!title) {
       return res.status(400).json({
@@ -253,7 +191,6 @@ router.post('/offers', (req, res, next) => {
       });
     }
 
-
     if (!description) {
       return res.status(400).json({
         error: 'DESCRIPTION_REQUIRED',
@@ -261,31 +198,16 @@ router.post('/offers', (req, res, next) => {
       });
     }
 
-
-    if (
-      !Number.isInteger(reward) ||
-      reward < 0
-    ) {
+    if (!Number.isInteger(reward) || reward < 0) {
       return res.status(400).json({
         error: 'INVALID_REWARD',
         message: 'Reward must be a positive integer'
       });
     }
 
+    const taskId = crypto.randomUUID();
 
-    /*
-     * ID unique.
-     */
-
-    const taskId =
-      crypto.randomUUID();
-
-
-    /*
-     * Création de la tâche.
-     */
-
-    db.prepare(`
+    await pool.query(`
       INSERT INTO tasks (
         id,
         title,
@@ -295,155 +217,89 @@ router.post('/offers', (req, res, next) => {
         currency,
         status
       )
-      VALUES (
-        ?,
-        ?,
-        ?,
-        ?,
-        ?,
-        'XAF',
-        'ACTIVE'
-      )
-    `).run(
-      taskId,
-      title,
-      description,
-      type,
-      reward
-    );
-
+      VALUES ($1, $2, $3, $4, $5, 'XAF', 'ACTIVE')
+    `, [taskId, title, description, type, reward]);
 
     return res.status(201).json({
       success: true,
       id: taskId,
       message: 'Offer created successfully'
     });
-
   } catch (error) {
     next(error);
   }
 });
 
-
 /*
  * ============================================================
  * ACTIVER / DESACTIVER UNE OFFRE
- * ============================================================
- *
  * PATCH /api/admin/offers/:id/toggle
+ * ============================================================
  */
 
-router.patch(
-  '/offers/:id/toggle',
-  (req, res, next) => {
+router.patch('/offers/:id/toggle', async (req, res, next) => {
+  try {
+    const pool = getPostgresPool();
 
-    try {
+    const result = await pool.query(`
+      SELECT id, status
+      FROM tasks
+      WHERE id = $1
+      LIMIT 1
+    `, [req.params.id]);
 
-      const db = getDb();
+    const task = result.rows[0];
 
-
-      const task =
-        db.prepare(`
-          SELECT
-            id,
-            status
-          FROM tasks
-          WHERE id = ?
-          LIMIT 1
-        `).get(req.params.id);
-
-
-      if (!task) {
-        return res.status(404).json({
-          error: 'OFFER_NOT_FOUND',
-          message: 'Offer not found'
-        });
-      }
-
-
-      const nextStatus =
-        task.status === 'ACTIVE'
-          ? 'DISABLED'
-          : 'ACTIVE';
-
-
-      db.prepare(`
-        UPDATE tasks
-        SET status = ?
-        WHERE id = ?
-      `).run(
-        nextStatus,
-        task.id
-      );
-
-
-      return res.json({
-        success: true,
-        id: task.id,
-        status: nextStatus,
-        active: nextStatus === 'ACTIVE'
+    if (!task) {
+      return res.status(404).json({
+        error: 'OFFER_NOT_FOUND',
+        message: 'Offer not found'
       });
-
-    } catch (error) {
-      next(error);
     }
-  }
-);
 
+    const nextStatus =
+      task.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE';
+
+    await pool.query(`
+      UPDATE tasks
+      SET status = $1
+      WHERE id = $2
+    `, [nextStatus, task.id]);
+
+    return res.json({
+      success: true,
+      id: task.id,
+      status: nextStatus,
+      active: nextStatus === 'ACTIVE'
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 /*
  * ============================================================
  * PARTENAIRES
  * ============================================================
- *
- * Les tables partenaires ne font pas encore partie
- * du schéma V33.2.7 actuellement utilisé.
- *
- * On conserve les endpoints pour éviter que l'interface
- * admin ne casse.
- */
-
-
-/*
- * GET /api/admin/partners
  */
 
 router.get('/partners', (req, res) => {
-
   return res.json([]);
-
 });
-
-
-/*
- * POST /api/admin/partners
- */
 
 router.post('/partners', (req, res) => {
-
   return res.status(501).json({
     error: 'PARTNERS_NOT_IMPLEMENTED',
-    message:
-      'Partner management is not available in the current database schema'
+    message: 'Partner management is not available in the current database schema'
   });
-
 });
-
-
-/*
- * PATCH /api/admin/partners/:id
- */
 
 router.patch('/partners/:id', (req, res) => {
-
   return res.status(501).json({
     error: 'PARTNERS_NOT_IMPLEMENTED',
-    message:
-      'Partner management is not available in the current database schema'
+    message: 'Partner management is not available in the current database schema'
   });
-
 });
-
 
 /*
  * ============================================================
@@ -452,33 +308,12 @@ router.patch('/partners/:id', (req, res) => {
  */
 
 router.get('/conversions', (req, res) => {
-
   return res.json([]);
-
 });
 
-
 /*
  * ============================================================
- * FIN PARTIE 1
- * ============================================================
- *
- * NE PAS AJOUTER module.exports ICI.
- *
- * La PARTIE 2 doit être collée directement après cette ligne.
- */
-
-/*
- * ============================================================
- * PARTIE 2/2
- * GESTION DES DEMANDES DE RETRAIT
- * ============================================================
- */
-
-
-/*
- * ============================================================
- * LISTE DES DEMANDES DE RETRAIT - POSTGRESQL
+ * DEMANDES DE RETRAIT
  * ============================================================
  */
 
@@ -519,10 +354,9 @@ router.get('/payout-requests', async (req, res, next) => {
   }
 });
 
-
 /*
  * ============================================================
- * MODIFIER LE STATUT D'UN RETRAIT - POSTGRESQL
+ * MODIFIER LE STATUT D'UN RETRAIT
  * ============================================================
  */
 
@@ -572,10 +406,6 @@ router.patch('/payout-requests/:id', async (req, res, next) => {
 
     const previousStatus = String(payout.status).toUpperCase();
 
-    /*
-     * Une demande déjà dans le statut demandé
-     * ne doit pas être traitée une seconde fois.
-     */
     if (previousStatus === requestedStatus) {
       await client.query('COMMIT');
 
@@ -587,9 +417,6 @@ router.patch('/payout-requests/:id', async (req, res, next) => {
       });
     }
 
-    /*
-     * Les demandes payées ou rejetées sont définitives.
-     */
     if (['PAID', 'REJECTED'].includes(previousStatus)) {
       await client.query('ROLLBACK');
 
@@ -599,9 +426,6 @@ router.patch('/payout-requests/:id', async (req, res, next) => {
       });
     }
 
-    /*
-     * Un paiement doit obligatoirement être approuvé avant.
-     */
     if (
       requestedStatus === 'PAID' &&
       previousStatus !== 'APPROVED'
@@ -614,10 +438,6 @@ router.patch('/payout-requests/:id', async (req, res, next) => {
       });
     }
 
-    /*
-     * Remboursement automatique en cas de rejet.
-     * La clé unique empêche tout double remboursement.
-     */
     if (requestedStatus === 'REJECTED') {
       await client.query(`
         INSERT INTO ledger_entries (
@@ -644,9 +464,7 @@ router.patch('/payout-requests/:id', async (req, res, next) => {
         payout.currency,
         String(payout.id),
         `payout-refund:${payout.id}`,
-        JSON.stringify({
-          reason: 'PAYOUT_REJECTED'
-        })
+        JSON.stringify({ reason: 'PAYOUT_REJECTED' })
       ]);
     }
 
@@ -654,10 +472,7 @@ router.patch('/payout-requests/:id', async (req, res, next) => {
       UPDATE payout_requests
       SET status = $1
       WHERE id = $2
-    `, [
-      requestedStatus,
-      payout.id
-    ]);
+    `, [requestedStatus, payout.id]);
 
     await client.query('COMMIT');
 
@@ -667,7 +482,6 @@ router.patch('/payout-requests/:id', async (req, res, next) => {
       previous_status: previousStatus,
       status: requestedStatus
     });
-
   } catch (error) {
     if (client) {
       try {
@@ -682,37 +496,21 @@ router.patch('/payout-requests/:id', async (req, res, next) => {
     }
   }
 });
-  
+
 /*
  * ============================================================
- * VERIFICATION RAPIDE DU ROUTEUR ADMIN
+ * STATUT DU ROUTEUR ADMIN
  * ============================================================
- *
- * GET /api/admin/status
- *
- * Cette route permet de vérifier facilement que le module
- * admin est bien chargé par le serveur.
  */
 
 router.get('/status', (req, res) => {
-
   return res.json({
     success: true,
     module: 'admin',
     status: 'online',
     version: 'V33.2.7'
   });
-
 });
 
-
-/*
- * ============================================================
- * EXPORT DU ROUTEUR
- * ============================================================
- *
- * IMPORTANT :
- * Cette ligne doit être la dernière ligne du fichier.
- */
-
 module.exports = router;
+                            
