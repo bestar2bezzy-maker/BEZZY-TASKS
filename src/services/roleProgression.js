@@ -1,11 +1,14 @@
+
 /*
  * ============================================================
  * BEZZY TASKS
- * V33.7
- * SERVICE DE PROGRESSION DES RÔLES
+ * V33.8
+ * SERVICE DE PROGRESSION DES TITRES
+ * POSTGRESQL
  * ============================================================
  *
- * Ce service centralise les calculs nécessaires au système :
+ * Les titres de progression sont indépendants des rôles
+ * du personnel de la plateforme.
  *
  * USER
  *   ↓
@@ -17,48 +20,29 @@
  *   ↓
  * ELITE
  *
- * Il ne modifie pas encore les rôles.
- * Il prépare uniquement les données nécessaires à leur évaluation.
+ * Ce service ne donne aucun droit administratif.
+ * Il prépare uniquement les données de progression.
  *
  * ============================================================
  */
 
-const crypto = require('crypto');
-
-const { getDb } = require('../config/database');
-
-
-/*
- * ============================================================
- * OUTILS
- * ============================================================
- */
-
-function getDatabase() {
-  return getDb();
-}
+const { getPostgresPool } = require('../config/postgres');
 
 
 /*
  * ============================================================
  * COMPTER LES UTILISATEURS ACTIFS PARRAINÉS
  * ============================================================
- *
- * Retourne le nombre de filleuls directs d'un utilisateur
- * qui respectent les conditions configurées comme utilisateur
- * actif.
- *
- * ============================================================
  */
 
-function countActiveReferredUsers(userId) {
+async function countActiveReferredUsers(userId) {
   if (!userId) {
     return 0;
   }
 
-  const db = getDatabase();
+  const pool = getPostgresPool();
 
-  const config = db.prepare(`
+  const configResult = await pool.query(`
     SELECT
       requires_verified_account,
       requires_platform_activity,
@@ -69,142 +53,125 @@ function countActiveReferredUsers(userId) {
     WHERE id = 1
       AND is_active = 1
     LIMIT 1
-  `).get();
+  `);
+
+  const config = configResult.rows[0];
 
   if (!config) {
     return 0;
   }
 
-  const windowDays =
-    Number(config.activity_window_days) > 0
-      ? Number(config.activity_window_days)
-      : 30;
-
-  const minimumActivities =
-    Number(config.minimum_activities) > 0
-      ? Number(config.minimum_activities)
-      : 1;
-
   /*
-   * NOTE :
-   * Les colonnes exactes d'activité et d'anti-fraude seront
-   * branchées sur leurs tables respectives lorsque le moteur
-   * anti-fraude sera finalisé.
+   * Pour cette version, le comptage repose sur
+   * la vérification de l'adresse e-mail.
    *
-   * Pour cette première version, on compte uniquement les
-   * comptes vérifiés lorsque cette exigence est activée.
+   * Les contrôles d'activité et anti-fraude seront
+   * branchés lorsque leurs données seront disponibles.
    */
 
-  let sql = `
-    SELECT COUNT(*) AS total
-    FROM users u
-    WHERE u.referred_by_user_id = ?
-  `;
-
-  const params = [userId];
+  const conditions = [
+    'referred_by_user_id = $1'
+  ];
 
   if (Number(config.requires_verified_account) === 1) {
-    sql += `
-      AND u.email_verified_at IS NOT NULL
-    `;
+    conditions.push('email_verified_at IS NOT NULL');
   }
 
-  /*
-   * Les paramètres suivants sont conservés pour permettre au
-   * moteur d'évoluer sans modifier son interface.
-   */
+  const result = await pool.query(`
+    SELECT COUNT(*)::INTEGER AS total
+    FROM users
+    WHERE ${conditions.join(' AND ')}
+  `, [userId]);
 
-  void requiresPlatformActivity(config);
-  void minimumActivities;
-  void windowDays;
-  void antiFraudRequired(config);
-
-  const result = db.prepare(sql).get(...params);
-
-  return Number(result?.total || 0);
+  return Number(result.rows[0]?.total || 0);
 }
+
 
 /*
  * ============================================================
- * LECTURE DE LA CONFIGURATION D'UN RÔLE
+ * LIRE LA CONFIGURATION D'UN TITRE
  * ============================================================
  */
 
-function getRoleProgressionConfig(role) {
-  if (!role) {
+async function getRoleProgressionConfig(title) {
+  if (!title) {
     return null;
   }
 
-  const db = getDatabase();
+  const pool = getPostgresPool();
 
-  return db.prepare(`
+  const result = await pool.query(`
     SELECT
-  role,
-  initial_required_users,
-  monthly_required_users,
-  promotion_required_users,
-  promotion_target_role,
-  demotion_target_role,
-  is_active
+      role,
+      initial_required_users,
+      monthly_required_users,
+      promotion_required_users,
+      promotion_target_role,
+      demotion_target_role,
+      is_active
     FROM role_progression_config
-    WHERE role = ?
+    WHERE LOWER(role) = LOWER($1)
       AND is_active = 1
     LIMIT 1
-  `).get(String(role).toLowerCase());
+  `, [String(title)]);
+
+  return result.rows[0] || null;
 }
 
 
 /*
  * ============================================================
- * LECTURE DES CONDITIONS DE PROGRESSION
+ * LIRE LES CONDITIONS DE PROGRESSION
  * ============================================================
  */
 
-function getProgressionRequirements(role) {
-  const config = getRoleProgressionConfig(role);
+async function getProgressionRequirements(title) {
+  const config = await getRoleProgressionConfig(title);
 
   if (!config) {
     return null;
   }
 
   return {
-  role: config.role,
+    role: config.role,
 
-  monthlyRequiredUsers:
-    Number(config.monthly_required_users || 0),
+    initialRequiredUsers:
+      Number(config.initial_required_users || 0),
 
-  promotionRequiredUsers:
-    Number(config.promotion_required_users || 0),
+    monthlyRequiredUsers:
+      Number(config.monthly_required_users || 0),
 
-  promotionTargetRole:
-    config.promotion_target_role || null,
+    promotionRequiredUsers:
+      Number(config.promotion_required_users || 0),
 
-  demotionTargetRole:
-    config.demotion_target_role || null
-};
+    promotionTargetRole:
+      config.promotion_target_role || null,
+
+    demotionTargetRole:
+      config.demotion_target_role || null
+  };
 }
-  
+
+
 /*
  * ============================================================
  * PRÉPARER L'ÉVALUATION D'UN MEMBRE
  * ============================================================
  */
 
-function buildRoleEvaluation(userId, role) {
-  if (!userId || !role) {
+async function buildRoleEvaluation(userId, title) {
+  if (!userId || !title) {
     return null;
   }
 
-  const normalizedRole =
-    String(role).toLowerCase();
+  const normalizedTitle =
+    String(title).trim().toLowerCase();
 
   const activeReferredUsers =
-    countActiveReferredUsers(userId);
+    await countActiveReferredUsers(userId);
 
   const requirements =
-    getProgressionRequirements(
-      normalizedRole
-    );
+    await getProgressionRequirements(normalizedTitle);
 
   if (!requirements) {
     return null;
@@ -222,9 +189,12 @@ function buildRoleEvaluation(userId, role) {
   return {
     userId,
 
-    role: normalizedRole,
+    title: normalizedTitle,
 
     activeReferredUsers,
+
+    initialRequiredUsers:
+      requirements.initialRequiredUsers,
 
     monthlyRequiredUsers:
       requirements.monthlyRequiredUsers,
@@ -236,27 +206,12 @@ function buildRoleEvaluation(userId, role) {
 
     promotionThresholdReached,
 
-        promotionTargetRole:
+    promotionTargetRole:
       requirements.promotionTargetRole,
 
     demotionTargetRole:
       requirements.demotionTargetRole
   };
-    }
-
-
-/*
- * ============================================================
- * UTILITAIRES INTERNES
- * ============================================================
- */
-
-function requiresPlatformActivity(config) {
-  return Number(config.requires_platform_activity) === 1;
-}
-
-function antiFraudRequired(config) {
-  return Number(config.anti_fraud_required) === 1;
 }
 
 
@@ -272,3 +227,4 @@ module.exports = {
   getProgressionRequirements,
   buildRoleEvaluation
 };
+                                        
