@@ -2507,11 +2507,14 @@ if (!passwordOk) {
      * ========================================================
      */
 
-    const accessToken = signAccessToken({
-      id: user.id,
-      role: user.role || 'USER',
-      country_code: user.country_code || 'CG'
-    });
+    
+const accessToken = signAccessToken({
+  id: user.id,
+  staff_role: user.staff_role || 'NONE',
+  progression_title: user.progression_title || 'user',
+  country_code: user.country_code || 'CG'
+});
+    
 
 
     /*
@@ -2687,14 +2690,16 @@ router.post('/auth/refresh', async (req, res, next) => {
      */
     const storedTokenResult = await pool.query(
       `
-        SELECT
-          rt.id,
-          rt.user_id,
-          rt.expires_at,
-          u.role,
-          u.country_code,
-          u.status,
-          u.email_verified_at
+        
+SELECT
+  rt.id,
+  rt.user_id,
+  rt.expires_at,
+  u.staff_role,
+  u.progression_title,
+  u.country_code,
+  u.status,
+  u.email_verified_at
         FROM refresh_tokens rt
         INNER JOIN users u
           ON u.id = rt.user_id
@@ -2803,13 +2808,15 @@ router.post('/auth/refresh', async (req, res, next) => {
     /*
      * Créer le nouvel access token.
      */
-    const accessToken =
-      signAccessToken({
-        id: storedToken.user_id,
-        role: storedToken.role || 'USER',
-        country_code:
-          storedToken.country_code || 'CG'
-      });
+    
+const accessToken =
+  signAccessToken({
+    id: storedToken.user_id,
+    staff_role: storedToken.staff_role || 'NONE',
+    progression_title: storedToken.progression_title || 'user',
+    country_code: storedToken.country_code || 'CG'
+  });
+  
 
 
     /*
@@ -3288,11 +3295,14 @@ router.get('/auth/google/callback', async (req, res, next) => {
      * durée que la connexion e-mail / mot de passe.
      */
 
-    const accessToken = signAccessToken({
-      id: user.id,
-      role: user.role || 'USER',
-      country_code: user.country_code || 'CG'
-    });
+    
+const accessToken = signAccessToken({
+  id: user.id,
+  staff_role: user.staff_role || 'NONE',
+  progression_title: user.progression_title || 'user',
+  country_code: user.country_code || 'CG'
+});
+    
 
 
     const refreshToken =
@@ -3387,18 +3397,21 @@ router.get('/me', requireAuth, async (req, res, next) => {
 
     const userResult = await pool.query(
       `
-        SELECT
-          id,
-          email,
-          phone,
-          country_code,
-          referral_code,
-          referred_by_code,
-          full_name,
-          role,
-          status,
-          email_verified_at,
-          created_at
+        
+SELECT
+  id,
+  email,
+  phone,
+  country_code,
+  referral_code,
+  referred_by_code,
+  full_name,
+  role,
+  progression_title,
+  staff_role,
+  status,
+  email_verified_at,
+  created_at
         FROM users
         WHERE id = $1
         LIMIT 1
@@ -3484,14 +3497,17 @@ router.get('/auth/status', requireAuth, async (req, res, next) => {
 
     const userResult = await pool.query(
       `
-        SELECT
-          id,
-          email,
-          phone,
-          country_code,
-          role,
-          status,
-          email_verified_at
+        
+SELECT
+  id,
+  email,
+  phone,
+  country_code,
+  role,
+  progression_title,
+  staff_role,
+  status,
+  email_verified_at
         FROM users
         WHERE id = $1
         LIMIT 1
@@ -3510,15 +3526,18 @@ router.get('/auth/status', requireAuth, async (req, res, next) => {
     return res.json({
       authenticated: true,
       email_verified: Boolean(user.email_verified_at),
-      user: {
-        id: user.id,
-        email: user.email,
-        phone: user.phone,
-        country_code: user.country_code,
-        role: user.role,
-        status: user.status
+      
+user: {
+  id: user.id,
+  email: user.email,
+  phone: user.phone,
+  country_code: user.country_code,
+  role: user.role,
+  progression_title: user.progression_title,
+  staff_role: user.staff_role,
+  status: user.status
       }
-    });
+      });
 
   } catch (error) {
     next(error);
