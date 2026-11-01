@@ -207,11 +207,11 @@ async function evaluateUserMonthly(
     title,
     year,
     month,
-    evaluation.activeReferredUsers,
+        evaluation.activeReferredUsers,
     evaluation.monthlyRequiredUsers,
     0,
     evaluation.monthlyQuotaReached ? 1 : 0,
-    1,
+    0,
     decision.decision,
     decision.nextRole,
     now
