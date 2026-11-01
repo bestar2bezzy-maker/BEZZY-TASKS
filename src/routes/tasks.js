@@ -359,7 +359,7 @@ router.post('/:id/submit', async (req, res, next) => {
 
 router.post(
   '/:id/review',
-  requireRole('admin', 'moderator'),
+    requireRole('PLATFORM_ADMIN', 'PLATFORM_MODERATOR'),
   async (req, res, next) => {
     let client;
 
