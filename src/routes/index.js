@@ -2610,16 +2610,19 @@ const accessToken = signAccessToken({
       success: true,
       access_token: accessToken,
       token: accessToken,
-      user: {
-        id: user.id,
-        email: user.email,
-        phone: user.phone,
-        country_code: user.country_code,
-        role: user.role,
-        status: user.status,
-        email_verified: true,
-        email_verified_at: user.email_verified_at,
-        created_at: user.created_at
+      
+user: {
+  id: user.id,
+  email: user.email,
+  phone: user.phone,
+  country_code: user.country_code,
+  role: user.role,
+  progression_title: user.progression_title,
+  staff_role: user.staff_role,
+  status: user.status,
+  email_verified: true,
+  email_verified_at: user.email_verified_at,
+  created_at: user.created_at
       }
     });
 
