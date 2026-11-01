@@ -3596,12 +3596,11 @@ try {
   const adminRouter = require('./admin');
 
   router.use(
-  '/admin',
+    '/admin',
   requireAuth,
   requireRole(
-    'super_admin',
-    'admin',
-    'moderator'
+    'PLATFORM_ADMIN',
+    'PLATFORM_MODERATOR'
   ),
   adminRouter
 );
