@@ -499,6 +499,197 @@ router.patch('/payout-requests/:id', async (req, res, next) => {
 
 /*
  * ============================================================
+ * REVUE DES ALERTES ANTIFRAUDE
+ * Personnel autorisé uniquement
+ * ============================================================
+ */
+
+// GET /api/admin/fraud-events
+router.get('/fraud-events', async (req, res, next) => {
+  try {
+    const pool = getPostgresPool();
+
+    const requestedStatus = String(
+      req.query.status || 'ALL'
+    ).trim().toUpperCase();
+
+    const allowedStatuses = [
+      'ALL',
+      'OPEN',
+      'CONFIRMED',
+      'CLEARED'
+    ];
+
+    if (!allowedStatuses.includes(requestedStatus)) {
+      return res.status(400).json({
+        error: 'INVALID_FRAUD_STATUS'
+      });
+    }
+
+    const limit = Math.min(
+      Math.max(parseInt(req.query.limit, 10) || 50, 1),
+      100
+    );
+
+    const offset = Math.max(
+      parseInt(req.query.offset, 10) || 0,
+      0
+    );
+
+    const result = await pool.query(
+      `
+        SELECT
+          id,
+          user_id,
+          event_type,
+          score,
+          metadata_json,
+          review_status,
+          created_at,
+          resolved_at,
+          resolved_by,
+          resolution_note
+        FROM fraud_events
+        WHERE ($1 = 'ALL' OR review_status = $1)
+        ORDER BY created_at DESC, id DESC
+        LIMIT $2 OFFSET $3
+      `,
+      [requestedStatus, limit, offset]
+    );
+
+    return res.json({
+      success: true,
+      status: requestedStatus,
+      count: result.rows.length,
+      limit,
+      offset,
+      events: result.rows
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
+
+// PATCH /api/admin/fraud-events/:id/review
+router.patch(
+  '/fraud-events/:id/review',
+  async (req, res, next) => {
+    let client;
+
+    try {
+      const eventId = String(req.params.id || '').trim();
+
+      if (!/^\d+$/.test(eventId)) {
+        return res.status(400).json({
+          error: 'INVALID_FRAUD_EVENT_ID'
+        });
+      }
+
+      const reviewStatus = String(
+        req.body?.review_status || ''
+      ).trim().toUpperCase();
+
+      if (!['CONFIRMED', 'CLEARED'].includes(reviewStatus)) {
+        return res.status(400).json({
+          error: 'INVALID_REVIEW_STATUS',
+          message: 'Use CONFIRMED or CLEARED.'
+        });
+      }
+
+      const note = String(
+        req.body?.resolution_note || ''
+      ).trim();
+
+      if (note.length > 2000) {
+        return res.status(400).json({
+          error: 'RESOLUTION_NOTE_TOO_LONG'
+        });
+      }
+
+      const pool = getPostgresPool();
+      client = await pool.connect();
+
+      await client.query('BEGIN');
+
+      const existing = await client.query(
+        `
+          SELECT id, review_status
+          FROM fraud_events
+          WHERE id = $1
+          FOR UPDATE
+        `,
+        [eventId]
+      );
+
+      if (existing.rows.length === 0) {
+        await client.query('ROLLBACK');
+
+        return res.status(404).json({
+          error: 'FRAUD_EVENT_NOT_FOUND'
+        });
+      }
+
+      if (existing.rows[0].review_status !== 'OPEN') {
+        await client.query('ROLLBACK');
+
+        return res.status(409).json({
+          error: 'FRAUD_EVENT_ALREADY_REVIEWED',
+          current_status: existing.rows[0].review_status
+        });
+      }
+
+      const updated = await client.query(
+        `
+          UPDATE fraud_events
+          SET
+            review_status = $1,
+            resolved_at = CURRENT_TIMESTAMP,
+            resolved_by = $2,
+            resolution_note = $3
+          WHERE id = $4
+          RETURNING
+            id,
+            review_status,
+            resolved_at,
+            resolved_by,
+            resolution_note
+        `,
+        [
+          reviewStatus,
+          req.user.sub,
+          note || null,
+          eventId
+        ]
+      );
+
+      await client.query('COMMIT');
+
+      return res.json({
+        success: true,
+        event: updated.rows[0]
+      });
+
+    } catch (error) {
+      if (client) {
+        try {
+          await client.query('ROLLBACK');
+        } catch (_) {}
+      }
+
+      next(error);
+
+    } finally {
+      if (client) {
+        client.release();
+      }
+    }
+  }
+);
+        
+/*
+ * ============================================================
  * STATUT DU ROUTEUR ADMIN
  * ============================================================
  */
