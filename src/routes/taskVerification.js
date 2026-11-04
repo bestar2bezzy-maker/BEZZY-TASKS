@@ -168,11 +168,12 @@ router.post('/partner-event', async (req, res, next) => {
         user_id: mapping.user_id,
         task_id: partnerTaskId,
         external_task_id: partnerTaskId,
-        event_type: eventType
+        event_type: eventType,
+        external_user_id: externalUserId
       },
       task,
       completion,
-      expectedUserId: completion.user_id
+      expectedUserId: mapping.user_id
     });
 
     client = await pool.connect();
