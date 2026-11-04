@@ -120,7 +120,7 @@ router.post('/partner-event', async (req, res, next) => {
     // Retrouver l'utilisateur Bezzy associé au compte partenaire.
     const mappingResult = await pool.query(
       `
-        SELECT user_id
+                SELECT user_id, external_user_id
         FROM partner_user_mappings
         WHERE partner_id = $1
           AND external_user_id = $2
