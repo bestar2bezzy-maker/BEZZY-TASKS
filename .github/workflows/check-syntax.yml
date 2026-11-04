@@ -1,4 +1,5 @@
-name: Vérification syntaxe JavaScript
+
+name: Vérification syntaxe et tests JavaScript
 
 on:
   push:
@@ -32,3 +33,7 @@ jobs:
 
       - name: Vérifier la syntaxe JavaScript
         run: npm run check
+
+      - name: Exécuter les tests
+        run: npm test
+        
