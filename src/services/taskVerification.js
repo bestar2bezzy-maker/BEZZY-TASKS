@@ -166,6 +166,16 @@ function verifyPartnerEvent({
     };
   }
 
+  const expectedPartnerId = normalizeId(task?.partner_id);
+
+  if (!expectedPartnerId || partnerId !== expectedPartnerId) {
+    return {
+      status: 'REJECTED',
+      reason: 'PARTNER_MISMATCH',
+      confidence: 0
+    };
+  }
+  
   const eventType =
     normalizeId(event.event_type);
 
