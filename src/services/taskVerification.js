@@ -133,7 +133,8 @@ function verifyPartnerEvent({
   event,
   task,
   completion,
-  expectedUserId = null
+  expectedUserId = null,
+  expectedExternalUserId = null
 }) {
 
   if (!event) {
@@ -234,16 +235,30 @@ function verifyPartnerEvent({
     };
   }
 
-  if (
-    expected &&
-    eventUserId !== expected
-  ) {
+    /*
+   * Correspondance de l'utilisateur externe partenaire
+   */
+  const eventExternalUserId =
+    normalizeId(event.external_user_id);
+
+  const expectedExternal =
+    normalizeId(expectedExternalUserId);
+
+  if (!eventExternalUserId || !expectedExternal) {
     return {
-      status: 'REJECTED',
-      reason: 'USER_MISMATCH',
+      status: 'REVIEW',
+      reason: 'MISSING_EXTERNAL_USER_ID',
       confidence: 0
     };
   }
+
+  if (eventExternalUserId !== expectedExternal) {
+    return {
+      status: 'REJECTED',
+      reason: 'EXTERNAL_USER_MISMATCH',
+      confidence: 0
+    };
+}
 
   /*
    * Correspondance tâche externe si fournie
