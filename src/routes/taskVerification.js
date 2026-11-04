@@ -60,10 +60,8 @@ router.post('/partner-event', async (req, res, next) => {
     ).trim();
 
     const partnerTaskId = String(
-      body.partner_task_id ||
-      body.task_id ||
-      ''
-    ).trim();
+  body.partner_task_id || ''
+).trim();
 
     const eventType = String(body.event_type || '').trim();
 
@@ -99,30 +97,17 @@ router.post('/partner-event', async (req, res, next) => {
       });
     }
 
-    // Trouver la tâche correspondant au partenaire.
-    let taskResult = await pool.query(
+        // Trouver la tâche via son identifiant externe partenaire.
+    const taskResult = await pool.query(
       `
         SELECT *
         FROM tasks
-        WHERE id::text = $1
-          AND partner_id::text = $2
+        WHERE partner_id = $1
+          AND partner_task_id = $2
         LIMIT 1
       `,
-      [partnerTaskId, partnerId]
+      [partnerId, partnerTaskId]
     );
-
-    if (taskResult.rows.length === 0) {
-      taskResult = await pool.query(
-        `
-          SELECT *
-          FROM tasks
-          WHERE partner_id::text = $1
-            AND partner_task_id::text = $2
-          LIMIT 1
-        `,
-        [partnerId, partnerTaskId]
-      );
-    }
 
     const task = taskResult.rows[0];
 
