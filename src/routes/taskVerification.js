@@ -59,9 +59,9 @@ router.post('/partner-event', async (req, res, next) => {
       ''
     ).trim();
 
-    const partnerTaskId = String(
-  body.partner_task_id || ''
-).trim();
+        const partnerTaskId = String(
+      body.partner_task_id || ''
+    ).trim();
 
     const eventType = String(body.event_type || '').trim();
 
@@ -96,8 +96,7 @@ router.post('/partner-event', async (req, res, next) => {
         duplicate: true
       });
     }
-
-        // Trouver la tâche via son identifiant externe partenaire.
+// Trouver la tâche via son identifiant externe partenaire.
     const taskResult = await pool.query(
       `
         SELECT *
