@@ -235,6 +235,17 @@ function verifyPartnerEvent({
     };
   }
 
+        if (
+    expected &&
+    eventUserId !== expected
+  ) {
+    return {
+      status: 'REJECTED',
+      reason: 'USER_MISMATCH',
+      confidence: 0
+    };
+        }
+
     /*
    * Correspondance de l'utilisateur externe partenaire
    */
