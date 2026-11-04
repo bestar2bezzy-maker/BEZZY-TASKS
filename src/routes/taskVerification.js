@@ -171,10 +171,10 @@ router.post('/partner-event', async (req, res, next) => {
         event_type: eventType,
         external_user_id: externalUserId
       },
-      task,
+            task,
       completion,
-      expectedUserId: mapping.user_id
-    });
+      expectedUserId: mapping.user_id,
+      expectedExternalUserId: mapping.external_user_id
 
     client = await pool.connect();
     await client.query('BEGIN');
