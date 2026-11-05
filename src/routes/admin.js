@@ -444,6 +444,26 @@ router.patch('/payout-requests/:id', async (req, res, next) => {
       WHERE id = $2
     `, [requestedStatus, payout.id]);
 
+await client.query(`
+  INSERT INTO payout_events (
+    payout_request_id,
+    event_type,
+    actor_user_id,
+    event_data,
+    idempotency_key
+  )
+  VALUES ($1, $2, $3, $4, $5)
+`, [
+  String(payout.id),
+  `PAYOUT_${requestedStatus}`,
+  req.user.sub,
+  JSON.stringify({
+    previous_status: previousStatus,
+    new_status: requestedStatus
+  }),
+  `payout-event:${requestedStatus.toLowerCase()}:${payout.id}`
+]);
+        
     await client.query('COMMIT');
 
     return res.json({
