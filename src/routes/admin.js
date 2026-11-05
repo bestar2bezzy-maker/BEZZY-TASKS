@@ -370,11 +370,10 @@ router.patch('/payout-requests/:id', async (req, res, next) => {
     ).trim().toUpperCase();
 
     const allowedStatuses = [
-      'PENDING',
-      'APPROVED',
-      'PAID',
-      'REJECTED'
-    ];
+  'PENDING',
+  'APPROVED',
+  'REJECTED'
+];
 
     if (!allowedStatuses.includes(requestedStatus)) {
       return res.status(400).json({
