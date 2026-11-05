@@ -2,7 +2,6 @@ const express = require('express');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 
-const { getDb } = require('../config/database');
 const { getPostgresPool } = require('../config/postgres');
 const env = require('../config/env');
 const {
