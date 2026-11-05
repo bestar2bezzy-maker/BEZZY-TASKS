@@ -438,36 +438,6 @@ router.patch('/payout-requests/:id', async (req, res, next) => {
       });
     }
 
-    if (requestedStatus === 'REJECTED') {
-      await client.query(`
-        INSERT INTO ledger_entries (
-          id,
-          user_id,
-          entry_type,
-          direction,
-          amount_minor,
-          currency,
-          reference_type,
-          reference_id,
-          idempotency_key,
-          metadata_json
-        )
-        VALUES (
-          $1, $2, 'PAYOUT_REFUND', 'CREDIT',
-          $3, $4, 'PAYOUT', $5, $6, $7
-        )
-        ON CONFLICT (idempotency_key) DO NOTHING
-      `, [
-        crypto.randomUUID(),
-        payout.user_id,
-        payout.amount,
-        payout.currency,
-        String(payout.id),
-        `payout-refund:${payout.id}`,
-        JSON.stringify({ reason: 'PAYOUT_REJECTED' })
-      ]);
-    }
-
     await client.query(`
       UPDATE payout_requests
       SET status = $1
