@@ -792,6 +792,30 @@ router.get('/health', (req, res) => {
 });
 
 
+router.get('/health/database', async (req, res) => {
+  try {
+    const result = await getPostgresPool().query(`
+      SELECT current_database() AS database_name
+    `);
+
+    res.json({
+      status: 'ok',
+      database: 'connected',
+      database_name: result.rows[0].database_name
+    });
+  } catch (error) {
+    console.error(
+      'Database health check failed:',
+      error.code || error.name
+    );
+
+    res.status(503).json({
+      status: 'error',
+      database: 'disconnected'
+    });
+  }
+});
+    
 router.get('/version', (req, res) => {
   res.json({
     version: '33.2.12',
