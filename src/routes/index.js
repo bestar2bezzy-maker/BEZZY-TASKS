@@ -805,9 +805,11 @@ router.get('/health/database', async (req, res) => {
     });
   } catch (error) {
     console.error(
-      'Database health check failed:',
-      error.code || error.name
-    );
+  'Database health check failed:',
+  error.message,
+  'Code:',
+  error.code || 'NO_CODE'
+);
 
     res.status(503).json({
       status: 'error',
