@@ -309,10 +309,10 @@ router.post('/payout-requests', async (req, res, next) => {
 
     const payout = requestResult.rows[0];
 
-    /*
-     * Réservation du montant dans le ledger.
-     * Un rejet ultérieur donnera lieu à un remboursement.
-     */
+/*
+ * Réservation définitive du montant dans le ledger.
+ * Aucun remboursement n'est autorisé par la plateforme.
+ */
     await client.query(`
       INSERT INTO ledger_entries (
         id,
@@ -340,6 +340,29 @@ router.post('/payout-requests', async (req, res, next) => {
       JSON.stringify({ method: method.code })
     ]);
 
+await client.query(`
+  INSERT INTO payout_events (
+    payout_request_id,
+    event_type,
+    actor_user_id,
+    event_data,
+    idempotency_key
+  )
+  VALUES ($1, $2, $3, $4, $5)
+`, [
+  String(payout.id),
+  'PAYOUT_REQUESTED',
+  req.user.sub,
+  JSON.stringify({
+    amount,
+    fee,
+    net_amount: netAmount,
+    currency: method.currency,
+    method: method.code
+  }),
+  `payout-event:requested:${payout.id}`
+]);
+    
     await client.query('COMMIT');
 
     return res.status(201).json({
