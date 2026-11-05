@@ -1,6 +1,5 @@
 const express = require('express');
 const crypto = require('crypto');
-const { getDb } = require('../config/database');
 const { getPostgresPool } = require('../config/postgres');
 const { requireAuth, requireRole } = require('../middleware/auth');
 
