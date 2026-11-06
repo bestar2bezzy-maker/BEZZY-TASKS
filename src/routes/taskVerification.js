@@ -274,7 +274,7 @@ router.post('/partner-event', async (req, res, next) => {
       });
     }
 
-        // Seule une soumission PENDING peut recevoir une récompense.
+    // Seule une soumission PENDING peut recevoir une récompense.
     if (
       String(lockedCompletion.status || '').toUpperCase() !== 'PENDING'
     ) {
