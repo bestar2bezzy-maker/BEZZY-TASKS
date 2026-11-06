@@ -351,24 +351,21 @@ router.post(
 
       const completionResult = await client.query(
         `
-                    SELECT
-            tc.*,
-            t.reward_minor,
-            t.partner_payout_minor,
-            t.reward_rate_bps,
-            t.max_user_reward_minor,
-            t.min_platform_margin_minor,
-            t.reward_model,
-            t.currency,
-            t.partner_id,
-            t.partner_task_id
-          FROM task_completions tc
-          JOIN tasks t ON t.id = tc.task_id
-          WHERE tc.id = $1
-          FOR UPDATE OF tc
-          JOIN tasks t ON t.id = tc.task_id
-          WHERE tc.id = $1
-          FOR UPDATE OF tc
+          SELECT
+  tc.*,
+  t.reward_minor,
+  t.partner_payout_minor,
+  t.reward_rate_bps,
+  t.max_user_reward_minor,
+  t.min_platform_margin_minor,
+  t.reward_model,
+  t.currency,
+  t.partner_id,
+  t.partner_task_id
+FROM task_completions tc
+JOIN tasks t ON t.id = tc.task_id
+WHERE tc.id = $1
+FOR UPDATE OF tc          
         `,
         [completion_id]
       );
