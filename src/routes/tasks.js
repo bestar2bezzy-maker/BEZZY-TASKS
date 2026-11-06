@@ -360,6 +360,10 @@ router.post(
             t.min_platform_margin_minor,
             t.reward_model,
             t.currency
+            t.reward_model,
+            t.currency,
+            t.partner_id,
+            t.partner_task_id
           FROM task_completions tc
           JOIN tasks t ON t.id = tc.task_id
           WHERE tc.id = $1
@@ -381,6 +385,19 @@ router.post(
         await client.query('ROLLBACK');
         return res.status(409).json({
           error: 'ALREADY_REVIEWED'
+        });
+      }
+
+            // Les tâches partenaires doivent être validées par webhook signé.
+      if (
+        normalizedDecision === 'APPROVED' &&
+        completion.partner_id
+      ) {
+        await client.query('ROLLBACK');
+
+        return res.status(409).json({
+          error: 'PARTNER_WEBHOOK_REQUIRED',
+          message: 'Partner tasks can only be approved by a verified partner webhook'
         });
       }
 
