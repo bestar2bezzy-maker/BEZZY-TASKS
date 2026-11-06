@@ -274,11 +274,9 @@ router.post('/partner-event', async (req, res, next) => {
       });
     }
 
-    // Ne jamais créditer une soumission déjà traitée ou rejetée.
+        // Seule une soumission PENDING peut recevoir une récompense.
     if (
-      ['APPROVED', 'REJECTED'].includes(
-        String(lockedCompletion.status || '').toUpperCase()
-      )
+      String(lockedCompletion.status || '').toUpperCase() !== 'PENDING'
     ) {
       await client.query('COMMIT');
 
@@ -287,7 +285,7 @@ router.post('/partner-event', async (req, res, next) => {
         verification_event_id: verificationEventId,
         completion_id: completion.id,
         reward_credited: false,
-        reason: 'COMPLETION_ALREADY_PROCESSED'
+        reason: 'COMPLETION_NOT_PENDING'
       });
     }
 
