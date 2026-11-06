@@ -292,37 +292,6 @@ router.post('/:id/submit', async (req, res, next) => {
       completion.id
     ]);
 
-    if (
-      verification.partner_event_id &&
-      verification.partner_id
-    ) {
-      await client.query(`
-        INSERT INTO task_verification_events (
-          id,
-          completion_id,
-          task_id,
-          user_id,
-          partner_id,
-          external_event_id,
-          event_type,
-          payload_json,
-          verification_status
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-        ON CONFLICT DO NOTHING
-      `, [
-        crypto.randomUUID(),
-        completion.id,
-        completion.task_id,
-        completion.user_id,
-        String(verification.partner_id),
-        String(verification.partner_event_id),
-        'SUBMISSION',
-        evidenceJson,
-        verification.status
-      ]);
-    }
-
     await client.query('COMMIT');
 
     const updatedResult = await pool.query(`
