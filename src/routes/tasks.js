@@ -359,7 +359,7 @@ router.post(
             t.max_user_reward_minor,
             t.min_platform_margin_minor,
             t.reward_model,
-            t.currency
+            t.currency,
             t.reward_model,
             t.currency,
             t.partner_id,
