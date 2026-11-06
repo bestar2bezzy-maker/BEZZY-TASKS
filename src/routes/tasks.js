@@ -358,11 +358,10 @@ router.post(
             t.reward_rate_bps,
             t.max_user_reward_minor,
             t.min_platform_margin_minor,
-            t.reward_model,
-            t.currency,
-            t.reward_model,
+                        t.reward_model,
             t.currency,
             t.partner_id,
+            t.partner_task_id
             t.partner_task_id
           FROM task_completions tc
           JOIN tasks t ON t.id = tc.task_id
