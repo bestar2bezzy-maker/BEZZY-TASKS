@@ -74,6 +74,11 @@ router.get('/history/me', async (req, res, next) => {
         tc.reviewed_at,
         t.title,
         t.reward_minor,
+        t.partner_payout_minor,
+        t.reward_rate_bps,
+        t.max_user_reward_minor,
+        t.min_platform_margin_minor,
+        t.reward_model,
         t.currency
       FROM task_completions tc
       JOIN tasks t ON t.id = tc.task_id
@@ -81,7 +86,17 @@ router.get('/history/me', async (req, res, next) => {
       ORDER BY tc.submitted_at DESC
     `, [req.user.sub]);
 
-    res.json({ history: result.rows });
+    const history = result.rows.map((task) => {
+      const reward = calculateTaskReward(task);
+
+      return {
+        ...task,
+        reward: reward.user_reward_minor,
+        currency: reward.currency
+      };
+    });
+
+    res.json({ history });
   } catch (error) {
     next(error);
   }
