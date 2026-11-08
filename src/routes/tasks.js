@@ -417,9 +417,9 @@ FOR UPDATE OF tc
 
             // Les tâches partenaires doivent être validées par webhook signé.
       if (
-        normalizedDecision === 'APPROVED' &&
-        completion.partner_id
-      ) {
+  normalizedDecision === 'APPROVED' &&
+  String(completion.reward_model || '').toUpperCase() === 'PARTNER_SHARE'
+) {
         await client.query('ROLLBACK');
 
         return res.status(409).json({
