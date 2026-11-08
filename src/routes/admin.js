@@ -437,11 +437,15 @@ router.patch('/payout-requests/:id', async (req, res, next) => {
       });
     }
 
-    await client.query(`
-      UPDATE payout_requests
-      SET status = $1
-      WHERE id = $2
-    `, [requestedStatus, payout.id]);
+        if (requestedStatus === 'REJECTED') {
+      await client.query(`
+        UPDATE payout_reservations
+        SET status = 'RELEASED',
+            updated_at = CURRENT_TIMESTAMP
+        WHERE payout_request_id = $1
+          AND status = 'RESERVED'
+      `, [String(payout.id)]);
+        }
 
 await client.query(`
   INSERT INTO payout_events (
