@@ -87,6 +87,7 @@ router.get('/history/me', async (req, res, next) => {
   }
 });
 
+
 router.get('/:id', async (req, res, next) => {
   try {
     const pool = getPostgresPool();
@@ -97,6 +98,11 @@ router.get('/:id', async (req, res, next) => {
         title,
         description,
         reward_minor,
+        partner_payout_minor,
+        reward_rate_bps,
+        max_user_reward_minor,
+        min_platform_margin_minor,
+        reward_model,
         currency,
         status,
         created_at
@@ -113,12 +119,20 @@ router.get('/:id', async (req, res, next) => {
       });
     }
 
-    res.json({ task });
+    const reward = calculateTaskReward(task);
+
+    res.json({
+      task: {
+        ...task,
+        reward: reward.user_reward_minor,
+        currency: reward.currency
+      }
+    });
   } catch (error) {
     next(error);
   }
 });
-
+                                    
 router.post('/:id/start', async (req, res, next) => {
   try {
     const pool = getPostgresPool();
