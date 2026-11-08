@@ -322,35 +322,24 @@ router.post('/payout-requests', async (req, res, next) => {
 
     const payout = requestResult.rows[0];
 
-/*
- * Réservation définitive du montant dans le ledger.
- * Aucun remboursement n'est autorisé par la plateforme.
- */
+    /*
+     * Réservation du montant demandé.
+     * Le portefeuille ne sera débité qu'après confirmation réelle du paiement.
+     */
     await client.query(`
-      INSERT INTO ledger_entries (
-        id,
+      INSERT INTO payout_reservations (
+        payout_request_id,
         user_id,
-        entry_type,
-        direction,
         amount_minor,
         currency,
-        reference_type,
-        reference_id,
-        idempotency_key,
-        metadata_json
+        status
       )
-      VALUES (
-        $1, $2, 'PAYOUT_REQUEST', 'DEBIT',
-        $3, $4, 'PAYOUT', $5, $6, $7
-      )
+      VALUES ($1, $2, $3, $4, 'RESERVED')
     `, [
-      crypto.randomUUID(),
+      String(payout.id),
       req.user.sub,
       amount,
-      method.currency,
-      String(payout.id),
-      `payout-debit:${payout.id}`,
-      JSON.stringify({ method: method.code })
+      method.currency
     ]);
 
 await client.query(`
