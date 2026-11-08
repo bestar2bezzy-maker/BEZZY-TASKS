@@ -244,20 +244,33 @@ router.post('/payout-requests', async (req, res, next) => {
     /*
      * Calcul du solde dans la devise du retrait.
      */
-    const balanceResult = await client.query(`
+        const balanceResult = await client.query(`
       SELECT
         COALESCE(
-          SUM(
-            CASE
-              WHEN direction = 'CREDIT' THEN amount_minor
-              ELSE -amount_minor
-            END
+          (
+            SELECT SUM(
+              CASE
+                WHEN direction = 'CREDIT' THEN amount_minor
+                ELSE -amount_minor
+              END
+            )
+            FROM ledger_entries
+            WHERE user_id = $1
+              AND currency = $2
+          ),
+          0
+        )
+        -
+        COALESCE(
+          (
+            SELECT SUM(amount_minor)
+            FROM payout_reservations
+            WHERE user_id = $1
+              AND currency = $2
+              AND status = 'RESERVED'
           ),
           0
         ) AS balance
-      FROM ledger_entries
-      WHERE user_id = $1
-        AND currency = $2
     `, [req.user.sub, method.currency]);
 
     const balance = Number(balanceResult.rows[0].balance || 0);
