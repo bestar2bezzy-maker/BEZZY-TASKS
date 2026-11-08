@@ -1,12 +1,13 @@
+
 /*
  * ============================================================
  * BEZZY TASKS — REWARD ENGINE
- * V33.3
+ * V34.0
  * ============================================================
  *
- * Centralise le calcul de la récompense utilisateur.
- * La récompense ne doit jamais dépasser le montant payé par
- * le partenaire ni mettre en danger la marge minimale de Bezzy.
+ * Deux modèles :
+ * PARTNER_SHARE   : financement partenaire.
+ * INTERNAL_BUDGET: financement Bezzy Tasks.
  */
 
 function toMinor(value) {
@@ -19,7 +20,6 @@ function toMinor(value) {
   return Math.floor(amount);
 }
 
-
 function toBps(value) {
   const rate = Number(value);
 
@@ -27,117 +27,99 @@ function toBps(value) {
     return 0;
   }
 
-  return Math.min(
-    Math.floor(rate),
-    10000
-  );
+  return Math.min(Math.floor(rate), 10000);
 }
 
-
 function calculateTaskReward(task) {
+  const rewardModel = String(
+    task?.reward_model || 'PARTNER_SHARE'
+  ).trim().toUpperCase();
 
-  const partnerPayout =
-    toMinor(
-      task?.partner_payout_minor
-    );
-
-
-  const rewardRateBps =
-    toBps(
-      task?.reward_rate_bps || 0
-    );
-
-
-  const minimumMargin =
-    toMinor(
-      task?.min_platform_margin_minor
-    );
-
-
-  /*
-   * Récompense théorique selon le
-   * pourcentage configuré.
-   *
-   * Exemple :
-   *
-   * 1500 FCFA × 20 %
-   * = 300 FCFA
-   */
-
-  const theoreticalReward =
-    Math.floor(
-      partnerPayout *
-      rewardRateBps /
-      10000
-    );
-
-
-  /*
-   * Plafond individuel.
-   */
+  const currency = task?.currency || 'XAF';
 
   const maxUserReward =
     task?.max_user_reward_minor == null
+      ? null
+      : toMinor(task.max_user_reward_minor);
+
+  /*
+   * MODÈLE 1 : TÂCHES INTERNES BEZZY
+   * La récompense provient du budget de la plateforme.
+   */
+  if (rewardModel === 'INTERNAL_BUDGET') {
+    const internalBudget = toMinor(task?.reward_minor);
+
+    const userReward = Math.min(
+      internalBudget,
+      maxUserReward == null
+        ? internalBudget
+        : maxUserReward
+    );
+
+    return {
+      reward_model: rewardModel,
+      partner_payout_minor: 0,
+      reward_rate_bps: 0,
+      theoretical_reward_minor: internalBudget,
+      user_reward_minor: userReward,
+      platform_margin_minor: 0,
+      currency
+    };
+  }
+
+  /*
+   * MODÈLE 2 : TÂCHES PARTENAIRES
+   * La récompense dépend du financement partenaire.
+   */
+  if (rewardModel !== 'PARTNER_SHARE') {
+    throw new Error(`UNSUPPORTED_REWARD_MODEL: ${rewardModel}`);
+  }
+
+  const partnerPayout = toMinor(
+    task?.partner_payout_minor
+  );
+
+  const rewardRateBps = toBps(
+    task?.reward_rate_bps || 0
+  );
+
+  const minimumMargin = toMinor(
+    task?.min_platform_margin_minor
+  );
+
+  const theoreticalReward = Math.floor(
+    partnerPayout * rewardRateBps / 10000
+  );
+
+  const userRewardCap =
+    maxUserReward == null
       ? partnerPayout
-      : toMinor(
-          task.max_user_reward_minor
-        );
+      : maxUserReward;
 
+  const marginSafeReward = Math.max(
+    0,
+    partnerPayout - minimumMargin
+  );
 
-  /*
-   * Protection de la marge minimale
-   * de Bezzy.
-   */
-
-  const marginSafeReward =
-    Math.max(
-      0,
-      partnerPayout -
-      minimumMargin
-    );
-
-
-  /*
-   * La récompense finale doit respecter
-   * TOUTES les protections.
-   */
-
-  const userReward =
-    Math.min(
-      theoreticalReward,
-      maxUserReward,
-      partnerPayout,
-      marginSafeReward
-    );
-
+  const userReward = Math.min(
+    theoreticalReward,
+    userRewardCap,
+    partnerPayout,
+    marginSafeReward
+  );
 
   return {
-
-    partner_payout_minor:
-      partnerPayout,
-
-    reward_rate_bps:
-      rewardRateBps,
-
-    theoretical_reward_minor:
-      theoreticalReward,
-
-    user_reward_minor:
-      userReward,
-
-    platform_margin_minor:
-      partnerPayout -
-      userReward,
-
-    currency:
-      task?.currency ||
-      "XAF"
-
+    reward_model: rewardModel,
+    partner_payout_minor: partnerPayout,
+    reward_rate_bps: rewardRateBps,
+    theoretical_reward_minor: theoreticalReward,
+    user_reward_minor: userReward,
+    platform_margin_minor: partnerPayout - userReward,
+    currency
   };
-
 }
-
 
 module.exports = {
   calculateTaskReward
 };
+  
