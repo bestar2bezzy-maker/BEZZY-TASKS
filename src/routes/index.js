@@ -2663,15 +2663,12 @@ user: {
  * ============================================================
  */
 
-router.post('/auth/refresh', async (req, res, next) => {
-  try {
 
-    /*
-     * Lire le cookie refresh token.
-     */
-    const cookies = String(
-      req.headers.cookie || ''
-    )
+router.post('/auth/refresh', async (req, res, next) => {
+  let client;
+
+  try {
+    const cookies = String(req.headers.cookie || '')
       .split(';')
       .map(x => x.trim());
 
@@ -2682,77 +2679,52 @@ router.post('/auth/refresh', async (req, res, next) => {
     if (!refreshCookie) {
       return res.status(401).json({
         error: 'REFRESH_TOKEN_REQUIRED',
-        message:
-          'Refresh token required'
+        message: 'Refresh token required'
       });
     }
 
-    const refreshToken =
-      refreshCookie.substring(
-        'bz_refresh_token='.length
-      );
+    const refreshToken = refreshCookie.substring(
+      'bz_refresh_token='.length
+    );
 
     if (!refreshToken) {
       return res.status(401).json({
         error: 'INVALID_REFRESH_TOKEN',
-        message:
-          'Invalid refresh token'
+        message: 'Invalid refresh token'
       });
     }
 
+    const refreshTokenHash = hashRefreshToken(refreshToken);
+    const pool = getPostgresPool();
 
-    /*
-     * Calculer le hash du token reçu.
-     */
-    const refreshTokenHash =
-      hashRefreshToken(refreshToken);
+    client = await pool.connect();
+    await client.query('BEGIN');
 
-
-        const pool = getPostgresPool();
-
-    /*
-     * Chercher uniquement un token :
-     * - correspondant au hash
-     * - non révoqué
-     * - non expiré
-     */
-    const storedTokenResult = await pool.query(
+    const storedTokenResult = await client.query(
       `
-        
-SELECT
-  rt.id,
-  rt.user_id,
-  rt.expires_at,
-  u.staff_role,
-  u.progression_title,
-  u.country_code,
-  u.status,
-  u.email_verified_at
+        SELECT
+          rt.id,
+          rt.user_id,
+          u.staff_role,
+          u.progression_title,
+          u.country_code,
+          u.status
         FROM refresh_tokens rt
-        INNER JOIN users u
-          ON u.id = rt.user_id
+        INNER JOIN users u ON u.id = rt.user_id
         WHERE rt.token_hash = $1
           AND rt.revoked_at IS NULL
-          AND rt.expires_at > $2
+          AND rt.expires_at > CURRENT_TIMESTAMP
         LIMIT 1
+        FOR UPDATE OF rt
       `,
-      [
-        refreshTokenHash,
-        new Date().toISOString()
-      ]
+      [refreshTokenHash]
     );
 
-    const storedToken =
-      storedTokenResult.rows[0] || null;
+    const storedToken = storedTokenResult.rows[0] || null;
 
-    /*
-     * Token absent, expiré ou révoqué.
-     */
     if (!storedToken) {
+      await client.query('ROLLBACK');
 
-      /*
-       * Effacer le cookie invalide.
-       */
       res.setHeader(
         'Set-Cookie',
         'bz_refresh_token=; Max-Age=0; Path=/api/auth; HttpOnly; Secure; SameSite=Lax'
@@ -2760,64 +2732,44 @@ SELECT
 
       return res.status(401).json({
         error: 'INVALID_REFRESH_TOKEN',
-        message:
-          'Invalid or expired refresh token'
+        message: 'Invalid or expired refresh token'
       });
     }
 
-
-    /*
-     * Vérifier que le compte est toujours actif.
-     */
     if (
       storedToken.status &&
       String(storedToken.status).toUpperCase() !== 'ACTIVE'
     ) {
+      await client.query('ROLLBACK');
 
       return res.status(403).json({
         error: 'ACCOUNT_DISABLED',
-        message:
-          'This account is not active'
+        message: 'This account is not active'
       });
     }
 
-
-    /*
-     * ========================================================
-     * ROTATION DU REFRESH TOKEN
-     * ========================================================
-     *
-     * L'ancien token est immédiatement révoqué.
-     * Un nouveau refresh token est créé.
-     */
-
-    
-          await pool.query(
+    const revokeResult = await client.query(
       `
         UPDATE refresh_tokens
-        SET revoked_at = $1
-        WHERE id = $2
+        SET revoked_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+          AND revoked_at IS NULL
       `,
-      [
-        new Date().toISOString(),
-        storedToken.id
-      ]
+      [storedToken.id]
     );
 
-    const newRefreshToken =
-      generateRefreshToken();
+    if (revokeResult.rowCount !== 1) {
+      throw new Error('REFRESH_TOKEN_REVOCATION_FAILED');
+    }
 
-    const newRefreshTokenHash =
-      hashRefreshToken(newRefreshToken);
+    const newRefreshToken = generateRefreshToken();
+    const newRefreshTokenHash = hashRefreshToken(newRefreshToken);
 
-    const newRefreshExpiresAt =
-      new Date(
-        Date.now() +
-        30 * 24 * 60 * 60 * 1000
-      ).toISOString();
+    const newRefreshExpiresAt = new Date(
+      Date.now() + 30 * 24 * 60 * 60 * 1000
+    ).toISOString();
 
-
-        await pool.query(
+    await client.query(
       `
         INSERT INTO refresh_tokens (
           user_id,
@@ -2833,28 +2785,19 @@ SELECT
       ]
     );
 
-    /*
-     * Créer le nouvel access token.
-     */
-    
-const accessToken =
-  signAccessToken({
-    id: storedToken.user_id,
-    staff_role: storedToken.staff_role || 'NONE',
-    progression_title: storedToken.progression_title || 'user',
-    country_code: storedToken.country_code || 'CG'
-  });
-  
+    const accessToken = signAccessToken({
+      id: storedToken.user_id,
+      staff_role: storedToken.staff_role || 'NONE',
+      progression_title: storedToken.progression_title || 'user',
+      country_code: storedToken.country_code || 'CG'
+    });
 
+    await client.query('COMMIT');
 
-    /*
-     * Remplacer le cookie par le nouveau refresh token.
-     */
     res.setHeader(
       'Set-Cookie',
       `bz_refresh_token=${newRefreshToken}; Max-Age=2592000; Path=/api/auth; HttpOnly; Secure; SameSite=Lax`
     );
-
 
     return res.status(200).json({
       success: true,
@@ -2863,10 +2806,23 @@ const accessToken =
     });
 
   } catch (error) {
+    if (client) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        console.error('REFRESH_ROLLBACK_FAILED:', rollbackError);
+      }
+    }
+
     next(error);
+
+  } finally {
+    if (client) {
+      client.release();
+    }
   }
 });
-
+    
   /*
  * ============================================================
  * LOGOUT
