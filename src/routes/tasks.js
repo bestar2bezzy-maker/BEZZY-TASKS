@@ -1,6 +1,6 @@
 const express = require('express');
 const crypto = require('crypto');
-const { getDb } = require('../config/database');
+const { getPostgresPool } = require('../config/postgres');
 const { requireAuth, requireRole } = require('../middleware/auth');
 
 const {
@@ -15,11 +15,11 @@ const router = express.Router();
 
 router.use(requireAuth);
 
-router.get('/', (req, res, next) => {
+router.get('/', async (req, res, next) => {
   try {
-    const db = getDb();
+    const pool = getPostgresPool();
 
-    const tasks = db.prepare(`
+    const result = await pool.query(`
       SELECT
         id,
         title,
@@ -36,10 +36,9 @@ router.get('/', (req, res, next) => {
       FROM tasks
       WHERE status = 'ACTIVE'
       ORDER BY created_at DESC
-    `).all();
+    `);
 
-    const tasksWithRewards = tasks.map(task => {
-
+    const tasksWithRewards = result.rows.map(task => {
       const reward = calculateTaskReward(task);
 
       return {
@@ -56,17 +55,16 @@ router.get('/', (req, res, next) => {
     res.json({
       tasks: tasksWithRewards
     });
-
   } catch (error) {
     next(error);
   }
 });
 
-router.get('/history/me', (req, res, next) => {
+router.get('/history/me', async (req, res, next) => {
   try {
-    const db = getDb();
+    const pool = getPostgresPool();
 
-    const history = db.prepare(`
+    const result = await pool.query(`
       SELECT
         tc.id,
         tc.task_id,
@@ -76,12 +74,27 @@ router.get('/history/me', (req, res, next) => {
         tc.reviewed_at,
         t.title,
         t.reward_minor,
+        t.partner_payout_minor,
+        t.reward_rate_bps,
+        t.max_user_reward_minor,
+        t.min_platform_margin_minor,
+        t.reward_model,
         t.currency
       FROM task_completions tc
       JOIN tasks t ON t.id = tc.task_id
-      WHERE tc.user_id = ?
+      WHERE tc.user_id = $1
       ORDER BY tc.submitted_at DESC
-    `).all(req.user.sub);
+    `, [req.user.sub]);
+
+    const history = result.rows.map((task) => {
+      const reward = calculateTaskReward(task);
+
+      return {
+        ...task,
+        reward: reward.user_reward_minor,
+        currency: reward.currency
+      };
+    });
 
     res.json({ history });
   } catch (error) {
@@ -89,22 +102,30 @@ router.get('/history/me', (req, res, next) => {
   }
 });
 
-router.get('/:id', (req, res, next) => {
-  try {
-    const db = getDb();
 
-    const task = db.prepare(`
+router.get('/:id', async (req, res, next) => {
+  try {
+    const pool = getPostgresPool();
+
+    const result = await pool.query(`
       SELECT
         id,
         title,
         description,
         reward_minor,
+        partner_payout_minor,
+        reward_rate_bps,
+        max_user_reward_minor,
+        min_platform_margin_minor,
+        reward_model,
         currency,
         status,
         created_at
       FROM tasks
-      WHERE id = ?
-    `).get(req.params.id);
+      WHERE id = $1
+    `, [req.params.id]);
+
+    const task = result.rows[0];
 
     if (!task) {
       return res.status(404).json({
@@ -113,21 +134,31 @@ router.get('/:id', (req, res, next) => {
       });
     }
 
-    res.json({ task });
+    const reward = calculateTaskReward(task);
+
+    res.json({
+      task: {
+        ...task,
+        reward: reward.user_reward_minor,
+        currency: reward.currency
+      }
+    });
   } catch (error) {
     next(error);
   }
 });
-
-router.post('/:id/start', (req, res, next) => {
+                                    
+router.post('/:id/start', async (req, res, next) => {
   try {
-    const db = getDb();
+    const pool = getPostgresPool();
 
-    const task = db.prepare(`
+    const taskResult = await pool.query(`
       SELECT id, status
       FROM tasks
-      WHERE id = ?
-    `).get(req.params.id);
+      WHERE id = $1
+    `, [req.params.id]);
+
+    const task = taskResult.rows[0];
 
     if (!task || task.status !== 'ACTIVE') {
       return res.status(404).json({
@@ -136,79 +167,89 @@ router.post('/:id/start', (req, res, next) => {
       });
     }
 
-    const existing = db.prepare(`
+    const existingResult = await pool.query(`
       SELECT id, status
       FROM task_completions
-      WHERE user_id = ? AND task_id = ?
+      WHERE user_id = $1 AND task_id = $2
       LIMIT 1
-    `).get(req.user.sub, req.params.id);
+    `, [req.user.sub, req.params.id]);
+
+    const existing = existingResult.rows[0];
 
     if (
       existing &&
       ['PENDING', 'APPROVED', 'STARTED'].includes(existing.status)
     ) {
-      const completion = db.prepare(`
+      const completionResult = await pool.query(`
         SELECT *
         FROM task_completions
-        WHERE id = ?
-      `).get(existing.id);
+        WHERE id = $1
+      `, [existing.id]);
 
-      return res.json({ completion });
+      return res.json({
+        completion: completionResult.rows[0]
+      });
     }
 
     if (existing && existing.status === 'REJECTED') {
-      db.prepare(`
+      await pool.query(`
         UPDATE task_completions
         SET status = 'STARTED',
             evidence_json = NULL,
             submitted_at = CURRENT_TIMESTAMP,
             reviewed_at = NULL
-        WHERE id = ?
-      `).run(existing.id);
+        WHERE id = $1
+      `, [existing.id]);
 
-      const restarted = db.prepare(`
+      const restartedResult = await pool.query(`
         SELECT *
         FROM task_completions
-        WHERE id = ?
-      `).get(existing.id);
+        WHERE id = $1
+      `, [existing.id]);
 
-      return res.json({ completion: restarted });
+      return res.json({
+        completion: restartedResult.rows[0]
+      });
     }
 
     const completionId = crypto.randomUUID();
 
-    db.prepare(`
+    await pool.query(`
       INSERT INTO task_completions (
         id,
         user_id,
         task_id,
         status
       )
-      VALUES (?, ?, ?, 'STARTED')
-    `).run(
+      VALUES ($1, $2, $3, 'STARTED')
+    `, [
       completionId,
       req.user.sub,
       req.params.id
-    );
+    ]);
 
-    const completion = db.prepare(`
+    const completionResult = await pool.query(`
       SELECT *
       FROM task_completions
-      WHERE id = ?
-    `).get(completionId);
+      WHERE id = $1
+    `, [completionId]);
 
-    res.status(201).json({ completion });
+    res.status(201).json({
+      completion: completionResult.rows[0]
+    });
   } catch (error) {
     next(error);
   }
 });
 
-router.post('/:id/submit', (req, res, next) => {
-  try {
-    const db = getDb();
-    const { evidence = null } = req.body || {};
+router.post('/:id/submit', async (req, res, next) => {
+  const pool = getPostgresPool();
+  const { evidence = null } = req.body || {};
 
-    const completion = db.prepare(`
+  let client;
+
+  try {
+    const completionResult = await pool.query(`
       SELECT
         tc.*,
         t.id AS task_id,
@@ -223,13 +264,15 @@ router.post('/:id/submit', (req, res, next) => {
         t.status AS task_status
       FROM task_completions tc
       JOIN tasks t ON t.id = tc.task_id
-      WHERE tc.user_id = ?
-        AND tc.task_id = ?
+      WHERE tc.user_id = $1
+        AND tc.task_id = $2
       LIMIT 1
-    `).get(
+    `, [
       req.user.sub,
       req.params.id
-    );
+    ]);
+
+    const completion = completionResult.rows[0];
 
     if (!completion) {
       return res.status(404).json({
@@ -258,91 +301,67 @@ router.post('/:id/submit', (req, res, next) => {
 
     let nextStatus = 'PENDING';
 
-    if (verification.status === 'REVIEW') {
-      nextStatus = 'PENDING';
-    }
-
     if (verification.status === 'REJECTED') {
       nextStatus = 'REJECTED';
     }
 
-    const transaction = db.transaction(() => {
+    client = await pool.connect();
 
-      db.prepare(`
-        UPDATE task_completions
-        SET status = ?,
-            evidence_json = ?,
-            submitted_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `).run(
-        nextStatus,
-        evidenceJson,
-        completion.id
-      );
+    await client.query('BEGIN');
 
-      /*
-       * Si la preuve contient déjà un événement partenaire,
-       * on conserve sa référence pour la vérification future.
-       */
-      if (
-        verification.partner_event_id &&
-        verification.partner_id
-      ) {
-        db.prepare(`
-          INSERT OR IGNORE INTO task_verification_events (
-            id,
-            completion_id,
-            task_id,
-            user_id,
-            partner_id,
-            external_event_id,
-            event_type,
-            payload_json,
-            verification_status
-          )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(
-          crypto.randomUUID(),
-          completion.id,
-          completion.task_id,
-          completion.user_id,
-          String(verification.partner_id),
-          String(verification.partner_event_id),
-          'SUBMISSION',
-          evidenceJson,
-          verification.status
-        );
-      }
-    });
+    await client.query(`
+      UPDATE task_completions
+      SET status = $1,
+          evidence_json = $2,
+          submitted_at = CURRENT_TIMESTAMP
+      WHERE id = $3
+    `, [
+      nextStatus,
+      evidenceJson,
+      completion.id
+    ]);
 
-    transaction();
+    await client.query('COMMIT');
 
-    const updated = db.prepare(`
+    const updatedResult = await pool.query(`
       SELECT *
       FROM task_completions
-      WHERE id = ?
-    `).get(completion.id);
+      WHERE id = $1
+    `, [completion.id]);
 
     res.json({
-      completion: updated,
+      completion: updatedResult.rows[0],
       verification: {
         status: verification.status,
         reason: verification.reason,
         confidence: verification.confidence
       }
     });
-
   } catch (error) {
+    if (client) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        console.error('Task submission rollback failed:', rollbackError);
+      }
+    }
+
     next(error);
+  } finally {
+    if (client) {
+      client.release();
+    }
   }
 });
 
 router.post(
   '/:id/review',
-  requireRole('admin', 'moderator'),
-  (req, res, next) => {
+    requireRole('PLATFORM_ADMIN', 'PLATFORM_MODERATOR'),
+  async (req, res, next) => {
+    let client;
+
     try {
-      const db = getDb();
+      const pool = getPostgresPool();
       const { completion_id, decision } = req.body || {};
       const normalizedDecision = String(decision || '').toUpperCase();
 
@@ -356,108 +375,135 @@ router.post(
         });
       }
 
-const completion = db.prepare(`
-        SELECT
-          tc.*,
-          t.reward_minor,
-          t.partner_payout_minor,
-          t.reward_rate_bps,
-          t.max_user_reward_minor,
-          t.min_platform_margin_minor,
-          t.reward_model,
-          t.currency
-        FROM task_completions tc
-        JOIN tasks t ON t.id = tc.task_id
-        WHERE tc.id = ?
-      `).get(completion_id);
+      client = await pool.connect();
+      await client.query('BEGIN');
+
+      const completionResult = await client.query(
+        `
+          SELECT
+  tc.*,
+  t.reward_minor,
+  t.partner_payout_minor,
+  t.reward_rate_bps,
+  t.max_user_reward_minor,
+  t.min_platform_margin_minor,
+  t.reward_model,
+  t.currency,
+  t.partner_id,
+  t.partner_task_id
+FROM task_completions tc
+JOIN tasks t ON t.id = tc.task_id
+WHERE tc.id = $1
+FOR UPDATE OF tc          
+        `,
+        [completion_id]
+      );
+
+      const completion = completionResult.rows[0];
 
       if (!completion) {
+        await client.query('ROLLBACK');
         return res.status(404).json({
           error: 'COMPLETION_NOT_FOUND'
         });
       }
 
       if (completion.status !== 'PENDING') {
+        await client.query('ROLLBACK');
         return res.status(409).json({
           error: 'ALREADY_REVIEWED'
         });
       }
 
-      const transaction = db.transaction(() => {
-        db.prepare(`
+            // Les tâches partenaires doivent être validées par webhook signé.
+      if (
+  normalizedDecision === 'APPROVED' &&
+  String(completion.reward_model || '').toUpperCase() === 'PARTNER_SHARE'
+) {
+        await client.query('ROLLBACK');
+
+        return res.status(409).json({
+          error: 'PARTNER_WEBHOOK_REQUIRED',
+          message: 'Partner tasks can only be approved by a verified partner webhook'
+        });
+      }
+
+      await client.query(
+        `
           UPDATE task_completions
-          SET status = ?,
+          SET status = $1,
               reviewed_at = CURRENT_TIMESTAMP
-          WHERE id = ?
-        `).run(
-          normalizedDecision,
-          completion_id
-        );
+          WHERE id = $2
+        `,
+        [normalizedDecision, completion_id]
+      );
 
-        if (normalizedDecision === 'APPROVED') {
+      if (normalizedDecision === 'APPROVED') {
+        const reward = calculateTaskReward(completion);
+        const idempotencyKey = `task-reward:${completion_id}`;
 
-          const reward = calculateTaskReward(
-            completion
-          );
-
-          const idempotencyKey =
-            `task-reward:${completion_id}`;
-
-          const existingLedger = db.prepare(`
-            SELECT id
-            FROM ledger_entries
-            WHERE idempotency_key = ?
-          `).get(idempotencyKey);
-
-          if (!existingLedger) {
-
-            if (reward.user_reward_minor <= 0) {
-              throw new Error(
-                'TASK_REWARD_INVALID'
-              );
-            }
-
-            db.prepare(`
-              INSERT INTO ledger_entries (
-                user_id,
-                entry_type,
-                direction,
-                amount_minor,
-                currency,
-                reference_type,
-                reference_id,
-                idempotency_key
-              )
-              VALUES (
-                ?,
-                'TASK_REWARD',
-                'CREDIT',
-                ?,
-                ?,
-                'TASK',
-                ?,
-                ?
-              )
-            `).run(
-              completion.user_id,
-              reward.user_reward_minor,
-              reward.currency,
-              completion.task_id,
-              idempotencyKey
-            );
-          }
+        if (
+          !reward ||
+          !Number.isFinite(Number(reward.user_reward_minor)) ||
+          Number(reward.user_reward_minor) <= 0
+        ) {
+          throw new Error('TASK_REWARD_INVALID');
         }
-      });
 
-      transaction();
+        await client.query(
+          `
+            INSERT INTO ledger_entries (
+              id,
+              user_id,
+              entry_type,
+              direction,
+              amount_minor,
+              currency,
+              reference_type,
+              reference_id,
+              idempotency_key
+            )
+            VALUES (
+              $1, $2, 'TASK_REWARD', 'CREDIT',
+              $3, $4, 'TASK', $5, $6
+            )
+            ON CONFLICT (idempotency_key) DO NOTHING
+          `,
+          [
+            crypto.randomUUID(),
+            completion.user_id,
+            reward.user_reward_minor,
+            reward.currency,
+            completion.task_id,
+            idempotencyKey
+          ]
+        );
+      }
 
-      res.json({
+      await client.query('COMMIT');
+
+      return res.json({
         status: 'ok',
         completion_id,
         decision: normalizedDecision
       });
     } catch (error) {
-      next(error);
+      if (client) {
+        try {
+          await client.query('ROLLBACK');
+        } catch (rollbackError) {
+          console.error(
+            'Task review rollback failed:',
+            rollbackError
+          );
+        }
+      }
+
+      return next(error);
+    } finally {
+      if (client) {
+        client.release();
+      }
     }
   }
 );

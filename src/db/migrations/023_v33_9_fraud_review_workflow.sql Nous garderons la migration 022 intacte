@@ -1,0 +1,63 @@
+
+-- ============================================================
+-- BEZZY TASKS - V33.9
+-- WORKFLOW DE TRAITEMENT DES ALERTES ANTI-FRAUDE
+-- ============================================================
+
+ALTER TABLE fraud_events
+ADD COLUMN IF NOT EXISTS review_status TEXT NOT NULL DEFAULT 'OPEN';
+
+ALTER TABLE fraud_events
+ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ;
+
+ALTER TABLE fraud_events
+ADD COLUMN IF NOT EXISTS resolved_by TEXT;
+
+ALTER TABLE fraud_events
+ADD COLUMN IF NOT EXISTS resolution_note TEXT;
+
+-- Statuts autorisés
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'fraud_events_review_status_check'
+      AND conrelid = 'fraud_events'::regclass
+  ) THEN
+    ALTER TABLE fraud_events
+    ADD CONSTRAINT fraud_events_review_status_check
+    CHECK (
+      review_status IN ('OPEN', 'CONFIRMED', 'CLEARED')
+    );
+  END IF;
+END
+$$;
+
+-- L'utilisateur qui traite l'alerte doit exister.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'fraud_events_resolved_by_fkey'
+      AND conrelid = 'fraud_events'::regclass
+  ) THEN
+    ALTER TABLE fraud_events
+    ADD CONSTRAINT fraud_events_resolved_by_fkey
+    FOREIGN KEY (resolved_by)
+    REFERENCES users(id)
+    ON DELETE SET NULL;
+  END IF;
+END
+$$;
+
+-- Index pour retrouver rapidement les alertes.
+CREATE INDEX IF NOT EXISTS idx_fraud_events_review_status
+ON fraud_events(review_status);
+
+CREATE INDEX IF NOT EXISTS idx_fraud_events_user_status
+ON fraud_events(user_id, review_status);
+
+CREATE INDEX IF NOT EXISTS idx_fraud_events_resolved_by
+ON fraud_events(resolved_by);

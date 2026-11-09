@@ -1,28 +1,21 @@
+
 /*
  * ============================================================
  * BEZZY TASKS
- * V33.7
- * MOTEUR GLOBAL D'ÉVALUATION MENSUELLE DES RÔLES
+ * V33.8
+ * MOTEUR GLOBAL D'ÉVALUATION MENSUELLE
+ * POSTGRESQL
  * ============================================================
  *
- * Ce service parcourt les utilisateurs concernés par le système
- * de progression et lance leur évaluation mensuelle.
+ * Ce service récupère les membres et lance leur évaluation.
  *
- * IMPORTANT :
- *
- * Ce service NE MODIFIE PAS directement les rôles.
- *
- * Il crée uniquement les décisions dans :
- *
- * role_monthly_performance
- *
- * Les transitions seront appliquées séparément au début
- * du mois suivant par roleTransition.js.
+ * Il utilise progression_title.
+ * Il ne modifie aucun rôle du personnel.
  *
  * ============================================================
  */
 
-const { getDb } = require('../config/database');
+const { getPostgresPool } = require('../config/postgres');
 
 const {
   evaluateUserMonthly
@@ -31,41 +24,20 @@ const {
 
 /*
  * ============================================================
- * OUTILS
- * ============================================================
- */
-
-function getDatabase() {
-  return getDb();
-}
-
-
-/*
- * ============================================================
  * RÉCUPÉRER LES UTILISATEURS À ÉVALUER
  * ============================================================
- *
- * On inclut les rôles qui participent au système de progression.
- *
- * USER
- * AMBASSADEUR
- * MODÉRATEUR
- * ADMINISTRATEUR
- * ELITE
- *
- * ============================================================
  */
 
-function getUsersForMonthlyEvaluation() {
-  const db = getDatabase();
+async function getUsersForMonthlyEvaluation() {
+  const pool = getPostgresPool();
 
-  return db.prepare(`
+  const result = await pool.query(`
     SELECT
       id,
-      role,
+      progression_title,
       status
     FROM users
-    WHERE LOWER(role) IN (
+    WHERE LOWER(COALESCE(progression_title, 'user')) IN (
       'user',
       'ambassadeur',
       'moderateur',
@@ -73,7 +45,9 @@ function getUsersForMonthlyEvaluation() {
       'elite'
     )
     ORDER BY created_at ASC
-  `).all();
+  `);
+
+  return result.rows;
 }
 
 
@@ -83,7 +57,7 @@ function getUsersForMonthlyEvaluation() {
  * ============================================================
  */
 
-function runMonthlyRoleEvaluation(
+async function runMonthlyRoleEvaluation(
   evaluationYear,
   evaluationMonth
 ) {
@@ -99,45 +73,46 @@ function runMonthlyRoleEvaluation(
     throw new Error('INVALID_EVALUATION_PERIOD');
   }
 
-  const users =
-    getUsersForMonthlyEvaluation();
+  const users = await getUsersForMonthlyEvaluation();
 
   const results = [];
 
   for (const user of users) {
+    const title = String(
+      user.progression_title || 'user'
+    ).trim().toLowerCase();
+
     try {
-      const evaluation =
-        evaluateUserMonthly(
-          user.id,
-          year,
-          month
-        );
+      const evaluation = await evaluateUserMonthly(
+        user.id,
+        year,
+        month
+      );
 
       results.push({
         success: true,
         userId: user.id,
-        role: user.role,
+        title,
         evaluation
       });
+
     } catch (error) {
       results.push({
         success: false,
         userId: user.id,
-        role: user.role,
+        title,
         error: error.message
       });
     }
   }
 
-  const successful =
-    results.filter(
-      result => result.success
-    ).length;
+  const successful = results.filter(
+    result => result.success
+  ).length;
 
-  const failed =
-    results.filter(
-      result => !result.success
-    ).length;
+  const failed = results.filter(
+    result => !result.success
+  ).length;
 
   return {
     evaluationYear: year,

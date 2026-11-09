@@ -18,9 +18,11 @@ const env = {
   REFRESH_TOKEN_DAYS:
     Number(process.env.REFRESH_TOKEN_DAYS || 30),
 
-  DB_PATH:
+    DB_PATH:
     process.env.DB_PATH ||
     path.join(process.cwd(), 'data', 'bezzy-tasks.sqlite'),
+
+  DATABASE_URL: process.env.DATABASE_URL || '',
 
   CORS_ORIGIN:
     process.env.CORS_ORIGIN || '*',

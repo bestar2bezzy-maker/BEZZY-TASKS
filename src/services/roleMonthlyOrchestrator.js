@@ -1,16 +1,16 @@
+
 /*
  * ============================================================
  * BEZZY TASKS
- * V33.7
- * ORCHESTRATEUR MENSUEL DE PROGRESSION DES RÔLES
+ * V33.8
+ * ORCHESTRATEUR MENSUEL DE PROGRESSION
+ * POSTGRESQL
  * ============================================================
  *
- * Ce service coordonne les différentes étapes du système
- * mensuel de progression des rôles.
+ * Coordonne les évaluations et les promotions mensuelles.
  *
- * Il ne sera pas encore exécuté automatiquement.
- *
- * Le cron Render sera branché ultérieurement.
+ * Aucune exécution automatique pour le moment.
+ * Le cron Render sera configuré ultérieurement.
  *
  * ============================================================
  */
@@ -22,6 +22,7 @@ const {
 const {
   runMonthlyRoleEvaluation
 } = require('./roleMonthlyRunner');
+
 
 /*
  * ============================================================
@@ -69,56 +70,49 @@ function isFirstDayOfMonth(date = new Date()) {
 
 /*
  * ============================================================
- * EXÉCUTER L'OUVERTURE MENSUELLE
- * ============================================================
- *
- * Cette fonction est destinée à être appelée le premier jour
- * d'un nouveau mois.
- *
- * Exemple :
- *
- * 1er octobre 2026
- *      ↓
- * application des décisions de septembre 2026
- *
+ * OUVERTURE MENSUELLE
  * ============================================================
  */
 
-function runMonthlyOpening(date = new Date()) {
+async function runMonthlyOpening(date = new Date()) {
   if (!isFirstDayOfMonth(date)) {
     throw new Error(
       'MONTHLY_OPENING_ONLY_ON_FIRST_DAY'
     );
   }
 
-  const currentYear =
-    date.getFullYear();
+  const currentYear = date.getFullYear();
+  const currentMonth = date.getMonth() + 1;
 
-  const currentMonth =
-    date.getMonth() + 1;
+  const previousPeriod = getPreviousMonth(
+    currentYear,
+    currentMonth
+  );
 
-  const previousPeriod =
-    getPreviousMonth(
-      currentYear,
-      currentMonth
-    );
+  /*
+   * Étape 1 : évaluer les membres pour le mois terminé.
+   */
 
   const evaluationResult =
-  runMonthlyRoleEvaluation(
-    previousPeriod.year,
-    previousPeriod.month
-  );
+    await runMonthlyRoleEvaluation(
+      previousPeriod.year,
+      previousPeriod.month
+    );
 
-const transitionResult =
-  applyMonthlyRoleTransitions(
-    previousPeriod.year,
-    previousPeriod.month
-  );
+  /*
+   * Étape 2 : appliquer les promotions éligibles.
+   */
+
+  const transitionResult =
+    await applyMonthlyRoleTransitions(
+      previousPeriod.year,
+      previousPeriod.month
+    );
+
   return {
     success: true,
 
     currentYear,
-
     currentMonth,
 
     appliedEvaluationYear:
@@ -127,6 +121,7 @@ const transitionResult =
     appliedEvaluationMonth:
       previousPeriod.month,
 
+    evaluationResult,
     transitionResult
   };
 }

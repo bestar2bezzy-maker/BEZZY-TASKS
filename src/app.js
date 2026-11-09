@@ -5,7 +5,6 @@ const env = require('./config/env');
 const requestId = require('./middleware/requestId');
 const rateLimit = require('./middleware/rateLimit');
 const api = require('./routes');
-require('./config/database');
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);

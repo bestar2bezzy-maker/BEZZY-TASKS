@@ -34,4 +34,5 @@ jobs:
       - name: Run read-only Neon diagnostic
         run: node scripts/test-neon-auth-read.js
         env:
-                    DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          

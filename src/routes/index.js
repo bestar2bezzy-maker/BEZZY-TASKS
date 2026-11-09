@@ -2,8 +2,15 @@ const express = require('express');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 
-const { getDb } = require('../config/database');
+const { getPostgresPool } = require('../config/postgres');
 const env = require('../config/env');
+const {
+  findUserByEmail,
+  findUserByPhone,
+  findUserByReferralCode,
+  createUserWithVerificationToken,
+  deleteEmailVerificationToken
+} = require('../config/auth-postgres');
 
 const {
   signAccessToken,
@@ -785,6 +792,32 @@ router.get('/health', (req, res) => {
 });
 
 
+router.get('/health/database', async (req, res) => {
+  try {
+    const result = await getPostgresPool().query(`
+      SELECT current_database() AS database_name
+    `);
+
+    res.json({
+      status: 'ok',
+      database: 'connected',
+      database_name: result.rows[0].database_name
+    });
+  } catch (error) {
+    console.error(
+  'Database health check failed:',
+  error.message,
+  'Code:',
+  error.code || 'NO_CODE'
+);
+
+    res.status(503).json({
+      status: 'error',
+      database: 'disconnected'
+    });
+  }
+});
+    
 router.get('/version', (req, res) => {
   res.json({
     version: '33.2.12',
@@ -831,11 +864,7 @@ router.get('/countries', (req, res) => {
 
 router.post('/auth/forgot-password', async (req, res, next) => {
   try {
-
-    const {
-      email
-    } = req.body || {};
-
+    const { email } = req.body || {};
     const normalizedEmail = normalizeEmail(email);
 
     if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
@@ -845,50 +874,46 @@ router.post('/auth/forgot-password', async (req, res, next) => {
       });
     }
 
-    const db = getDb();
+    const pool = getPostgresPool();
 
-    const user = db.prepare(`
-      SELECT
-        id,
-        email,
-        email_verified_at
-      FROM users
-      WHERE LOWER(email) = LOWER(?)
-      LIMIT 1
-    `).get(normalizedEmail);
-console.log(
-  'PASSWORD_RESET_DEBUG:',
-  JSON.stringify({
-    email: normalizedEmail,
-    userFound: !!user,
-    userId: user ? user.id : null,
-    emailVerified: user ? !!user.email_verified_at : null
-  })
-);
+    const userResult = await pool.query(
+      `
+        SELECT
+          id,
+          email,
+          email_verified_at
+        FROM users
+        WHERE LOWER(email) = LOWER($1)
+        LIMIT 1
+      `,
+      [normalizedEmail]
+    );
+
+    const user = userResult.rows[0] || null;
 
     /*
-     * Réponse volontairement identique si l'adresse
-     * n'existe pas afin d'éviter la divulgation
-     * de comptes existants.
+     * Réponse identique si l'adresse n'existe pas,
+     * pour éviter de révéler les comptes enregistrés.
      */
     if (!user) {
-  return res.status(200).json({
-    success: true,
-    message:
-      'Si cette adresse est associée à un compte, un e-mail de réinitialisation sera envoyé.'
-  });
+      return res.status(200).json({
+        success: true,
+        message:
+          'Si cette adresse est associée à un compte, un e-mail de réinitialisation sera envoyé.'
+      });
     }
-
 
     /*
      * Supprimer les anciens tokens non utilisés.
      */
-    db.prepare(`
-      DELETE FROM password_reset_tokens
-      WHERE user_id = ?
-        AND used_at IS NULL
-    `).run(user.id);
-
+    await pool.query(
+      `
+        DELETE FROM password_reset_tokens
+        WHERE user_id = $1
+          AND used_at IS NULL
+      `,
+      [user.id]
+    );
 
     /*
      * Générer un token cryptographiquement aléatoire.
@@ -897,82 +922,72 @@ console.log(
       .randomBytes(32)
       .toString('hex');
 
-
     /*
-     * Ne jamais stocker le token brut.
+     * Ne stocker que le hash du token.
      */
     const tokenHash = crypto
       .createHash('sha256')
       .update(rawToken)
       .digest('hex');
 
-
     /*
-     * Validité :
-     * 30 minutes.
+     * Validité : 30 minutes.
      */
     const expiresAt = new Date(
       Date.now() + 30 * 60 * 1000
     ).toISOString();
 
-
-    db.prepare(`
-      INSERT INTO password_reset_tokens (
-        user_id,
-        token_hash,
-        expires_at
-      )
-      VALUES (?, ?, ?)
-    `).run(
-      user.id,
-      tokenHash,
-      expiresAt
+    await pool.query(
+      `
+        INSERT INTO password_reset_tokens (
+          user_id,
+          token_hash,
+          expires_at
+        )
+        VALUES ($1, $2, $3)
+      `,
+      [
+        user.id,
+        tokenHash,
+        expiresAt
+      ]
     );
 
-
     /*
-     * Envoyer l'e-mail.
+     * Envoyer l'e-mail de réinitialisation.
      */
     try {
-
       await sendPasswordResetEmail({
         to: user.email,
         token: rawToken
       });
-
-      console.log(
-  'PASSWORD_RESET_EMAIL_SENT:',
-  user.email
-);
-
     } catch (emailError) {
-
-      db.prepare(`
-        DELETE FROM password_reset_tokens
-        WHERE token_hash = ?
-      `).run(tokenHash);
+      try {
+        await pool.query(
+          `
+            DELETE FROM password_reset_tokens
+            WHERE token_hash = $1
+          `,
+          [tokenHash]
+        );
+      } catch (cleanupError) {
+        console.error(
+          'PASSWORD_RESET_TOKEN_CLEANUP_FAILED:',
+          cleanupError
+        );
+      }
 
       console.error(
         'PASSWORD_RESET_EMAIL_FAILED:',
         emailError
       );
 
-console.error(
-  'PASSWORD_RESET_EMAIL_FAILED_DETAILS:',
-  JSON.stringify({
-    email: user.email,
-    name: emailError && emailError.name,
-    message: emailError && emailError.message
-  })
-);
-      
       return res.status(503).json({
         error: 'PASSWORD_RESET_EMAIL_FAILED',
         message:
           'Impossible d’envoyer l’e-mail de réinitialisation. Veuillez réessayer plus tard.'
       });
     }
-
 
     return res.status(200).json({
       success: true,
@@ -1264,19 +1279,13 @@ form.addEventListener("submit", async function(event) {
  */
 
 router.post('/auth/reset-password', async (req, res, next) => {
+  let client;
+
   try {
+    const { token, password } = req.body || {};
 
-    const {
-      token,
-      password
-    } = req.body || {};
-
-    const rawToken =
-      String(token || '').trim();
-
-    const newPassword =
-      String(password || '');
-
+    const rawToken = String(token || '').trim();
+    const newPassword = String(password || '');
 
     if (!rawToken) {
       return res.status(400).json({
@@ -1285,130 +1294,135 @@ router.post('/auth/reset-password', async (req, res, next) => {
       });
     }
 
-
     if (newPassword.length < 8) {
       return res.status(400).json({
         error: 'INVALID_PASSWORD',
-        message:
-          'Password must contain at least 8 characters'
+        message: 'Password must contain at least 8 characters'
       });
     }
-
 
     const tokenHash = crypto
       .createHash('sha256')
       .update(rawToken)
       .digest('hex');
 
+    const pool = getPostgresPool();
 
-    const db = getDb();
+    client = await pool.connect();
 
+    await client.query('BEGIN');
 
-    const resetToken = db.prepare(`
-      SELECT
-        id,
-        user_id,
-        expires_at,
-        used_at
-      FROM password_reset_tokens
-      WHERE token_hash = ?
-      LIMIT 1
-    `).get(tokenHash);
+    const tokenResult = await client.query(
+      `
+        SELECT
+          id,
+          user_id,
+          expires_at,
+          used_at
+        FROM password_reset_tokens
+        WHERE token_hash = $1
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [tokenHash]
+    );
 
+    const resetToken = tokenResult.rows[0] || null;
 
     if (!resetToken) {
+      await client.query('ROLLBACK');
       return res.status(400).json({
         error: 'INVALID_RESET_TOKEN',
-        message:
-          'Ce lien de réinitialisation est invalide ou expiré.'
+        message: 'Ce lien de réinitialisation est invalide ou expiré.'
       });
     }
-
 
     if (resetToken.used_at) {
+      await client.query('ROLLBACK');
       return res.status(400).json({
         error: 'RESET_TOKEN_USED',
-        message:
-          'Ce lien de réinitialisation a déjà été utilisé.'
+        message: 'Ce lien de réinitialisation a déjà été utilisé.'
       });
     }
-
 
     if (
       !resetToken.expires_at ||
       new Date(resetToken.expires_at).getTime() < Date.now()
     ) {
+      await client.query('ROLLBACK');
       return res.status(400).json({
         error: 'RESET_TOKEN_EXPIRED',
-        message:
-          'Ce lien de réinitialisation est expiré.'
+        message: 'Ce lien de réinitialisation est expiré.'
       });
     }
 
+    const passwordHash = await bcrypt.hash(newPassword, 12);
 
-    const passwordHash =
-      await bcrypt.hash(
-        newPassword,
-        12
-      );
+    const updateUser = await client.query(
+      `
+        UPDATE users
+        SET password_hash = $1
+        WHERE id = $2
+      `,
+      [passwordHash, resetToken.user_id]
+    );
 
+    if (updateUser.rowCount === 0) {
+      throw new Error('USER_NOT_FOUND');
+    }
 
-    const updateUser = db.prepare(`
-      UPDATE users
-      SET password_hash = ?
-      WHERE id = ?
-    `);
-
-
-    const markTokenUsed = db.prepare(`
-      UPDATE password_reset_tokens
-      SET used_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `);
-
-
-    const transaction = db.transaction(() => {
-
-      const result = updateUser.run(
-        passwordHash,
-        resetToken.user_id
-      );
-
-      if (!result.changes) {
-        throw new Error('USER_NOT_FOUND');
-      }
-
-      markTokenUsed.run(
-        resetToken.id
-      );
-
-      /*
-       * Invalider les autres tokens de réinitialisation
-       * encore actifs pour ce compte.
-       */
-      db.prepare(`
+    await client.query(
+      `
         UPDATE password_reset_tokens
         SET used_at = CURRENT_TIMESTAMP
-        WHERE user_id = ?
+        WHERE user_id = $1
           AND used_at IS NULL
-      `).run(resetToken.user_id);
+      `,
+      [resetToken.user_id]
+    );
 
-    });
+    /*
+     * Invalider également les sessions actives du compte,
+     * afin d'obliger les connexions suivantes à se réauthentifier.
+     */
+    await client.query(
+      `
+        UPDATE refresh_tokens
+        SET revoked_at = CURRENT_TIMESTAMP
+        WHERE user_id = $1
+          AND revoked_at IS NULL
+      `,
+      [resetToken.user_id]
+    );
 
-
-    transaction();
-
+    await client.query('COMMIT');
 
     return res.status(200).json({
       success: true,
-      message:
-        'Mot de passe modifié avec succès.'
+      message: 'Mot de passe modifié avec succès.'
     });
 
   } catch (error) {
+    if (client) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        console.error(
+          'PASSWORD_RESET_ROLLBACK_FAILED:',
+          rollbackError
+        );
+      }
+    }
+
     next(error);
+
+  } finally {
+    if (client) {
+      client.release();
+    }
   }
 });
+
 
 /*
  * ============================================================
@@ -1518,24 +1532,17 @@ router.post('/auth/register', async (req, res, next) => {
       });
     }
 
-
-    const db = getDb();
-
-
     /*
      * ========================================================
-     * EMAIL DEJA UTILISE
+     * VERIFICATIONS DANS NEON POSTGRESQL
      * ========================================================
      */
 
-    const existingEmail = db
-      .prepare(`
-        SELECT id
-        FROM users
-        WHERE LOWER(email) = LOWER(?)
-      `)
-      .get(normalizedEmail);
+    /*
+     * EMAIL DEJA UTILISE
+     */
 
+    const existingEmail = await findUserByEmail(normalizedEmail);
 
     if (existingEmail) {
       return res.status(409).json({
@@ -1544,11 +1551,8 @@ router.post('/auth/register', async (req, res, next) => {
       });
     }
 
-
     /*
-     * ========================================================
      * TELEPHONE INTERNATIONAL
-     * ========================================================
      */
 
     const internationalPhone = buildInternationalPhone(
@@ -1556,64 +1560,49 @@ router.post('/auth/register', async (req, res, next) => {
       countryCode
     );
 
-
     /*
-     * ========================================================
      * TELEPHONE DEJA UTILISE
-     * ========================================================
      */
 
-    const existingPhone = db
-      .prepare(`
-        SELECT id
-        FROM users
-        WHERE phone = ?
-           OR phone = ?
-      `)
-      .get(
-        normalizedPhone,
-        internationalPhone
-      );
+    const existingPhoneNational = await findUserByPhone(
+      normalizedPhone
+    );
 
+    const existingPhoneInternational = existingPhoneNational
+      ? null
+      : await findUserByPhone(internationalPhone);
 
-    if (existingPhone) {
+    if (existingPhoneNational || existingPhoneInternational) {
       return res.status(409).json({
         error: 'PHONE_EXISTS',
         message: 'Phone number already registered'
       });
     }
 
-  /*
- * ========================================================
- * VALIDATION DU CODE DE PARRAINAGE
- * ========================================================
- */
+    /*
+     * VALIDATION DU CODE DE PARRAINAGE
+     */
 
-const normalizedReferralCode =
-  referralCode
-    ? String(referralCode).trim()
-    : null;
+    const normalizedReferralCode = referralCode
+      ? String(referralCode).trim()
+      : null;
 
-let referralUserId = null;
+    let referralUserId = null;
 
-if (normalizedReferralCode) {
-  const referralUser = db.prepare(`
-    SELECT id
-    FROM users
-    WHERE referral_code = ?
-    LIMIT 1
-  `).get(normalizedReferralCode);
+    if (normalizedReferralCode) {
+      const referralUser = await findUserByReferralCode(
+        normalizedReferralCode
+      );
 
-  if (!referralUser) {
-    return res.status(400).json({
-      error: 'INVALID_REFERRAL_CODE',
-      message: 'Code de parrainage invalide'
-    });
-  }
+      if (!referralUser) {
+        return res.status(400).json({
+          error: 'INVALID_REFERRAL_CODE',
+          message: 'Code de parrainage invalide'
+        });
+      }
 
-  referralUserId = referralUser.id;
-}
-
+      referralUserId = referralUser.id;
+          }
 
     /*
      * ========================================================
@@ -1627,99 +1616,61 @@ if (normalizedReferralCode) {
     );
 
 
-    /*
+        /*
      * ========================================================
-     * CREATION UTILISATEUR
+     * CREATION UTILISATEUR ET TOKEN DANS NEON
      * ========================================================
      */
 
     const userId = crypto.randomUUID();
 
     const ownReferralCode =
-  'BZ' +
-  crypto.randomBytes(4)
-    .toString('hex')
-    .toUpperCase();
-
-    db.prepare(`
-INSERT INTO users (
-  id,
-  email,
-  phone,
-  country_code,
-  password_hash,
-  full_name,
-  referral_code,
-  referred_by_code,
-  referred_by_user_id
-)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-`).run(
-    userId,
-normalizedEmail,
-internationalPhone,
-countryCode,
-passwordHash,
-fullName ? String(fullName).trim() : null,
-ownReferralCode,
-normalizedReferralCode,
-referralUserId
-      );
+      'BZ' +
+      crypto.randomBytes(4)
+        .toString('hex')
+        .toUpperCase();
 
     /*
-     * ========================================================
-     * TOKEN VERIFICATION EMAIL
-
-    /*
-     * Suppression des anciens tokens non utilisés.
-     */
-    db.prepare(`
-      DELETE FROM email_verification_tokens
-      WHERE user_id = ?
-        AND used_at IS NULL
-    `).run(userId);
-
-
-    /*
-     * Token brut.
-     *
-     * Il n'est JAMAIS enregistré directement en base.
+     * Token brut : envoyé par e-mail uniquement.
      */
     const rawToken = crypto
       .randomBytes(32)
       .toString('hex');
 
-
     /*
-     * Hash SHA-256 du token.
+     * Seul le hash du token est enregistré en base.
      */
     const tokenHash = crypto
       .createHash('sha256')
       .update(rawToken)
       .digest('hex');
 
-
     /*
-     * Validité du lien :
-     * 24 heures.
+     * Le lien de vérification est valable 24 heures.
      */
     const expiresAt = new Date(
       Date.now() + 24 * 60 * 60 * 1000
     ).toISOString();
 
-
-    db.prepare(`
-      INSERT INTO email_verification_tokens (
-        user_id,
-        token_hash,
-        expires_at
-      )
-      VALUES (?, ?, ?)
-    `).run(
+    /*
+     * Création du compte et du token
+     * dans une transaction PostgreSQL.
+     */
+    await createUserWithVerificationToken({
       userId,
+      email: normalizedEmail,
+      phone: internationalPhone,
+      countryCode,
+      passwordHash,
+      fullName: fullName
+        ? String(fullName).trim()
+        : null,
+      referralCode: ownReferralCode,
+      referredByCode: normalizedReferralCode,
+      referredByUserId: referralUserId,
       tokenHash,
       expiresAt
-    );
+    });
 
 
     /*
@@ -1744,15 +1695,17 @@ referralUserId
        * On supprime le token inutilisable.
        */
 
-      db.prepare(`
-        DELETE FROM email_verification_tokens
-        WHERE user_id = ?
-          AND token_hash = ?
-      `).run(
-        userId,
-        tokenHash
-      );
-
+                 try {
+        await deleteEmailVerificationToken(
+          userId,
+          tokenHash
+        );
+      } catch (deleteError) {
+        console.error(
+          'VERIFICATION_TOKEN_CLEANUP_FAILED:',
+          deleteError
+        );
+  } 
 
       console.error(
         'VERIFICATION_EMAIL_FAILED:',
@@ -1807,7 +1760,7 @@ referralUserId
  * Le token brut n'est jamais stocké en base.
  */
 
-router.get('/auth/verify-email', (req, res, next) => {
+router.get('/auth/verify-email', async (req, res, next) => {
   try {
 
     const token = String(
@@ -1867,27 +1820,30 @@ router.get('/auth/verify-email', (req, res, next) => {
       .update(token)
       .digest('hex');
 
-
-    const db = getDb();
-
+    const pool = getPostgresPool();
 
     /*
      * ========================================================
-     * RECHERCHE DU TOKEN
+     * RECHERCHE DU TOKEN DANS NEON
      * ========================================================
      */
 
-    const verificationToken = db.prepare(`
-      SELECT
-        id,
-        user_id,
-        token_hash,
-        expires_at,
-        used_at
-      FROM email_verification_tokens
-      WHERE token_hash = ?
-      LIMIT 1
-    `).get(tokenHash);
+    const tokenResult = await pool.query(
+      `
+        SELECT
+          id,
+          user_id,
+          token_hash,
+          expires_at,
+          used_at
+        FROM email_verification_tokens
+        WHERE token_hash = $1
+        LIMIT 1
+      `,
+      [tokenHash]
+    );
+
+    const verificationToken = tokenResult.rows[0] || null;
 
 
     /*
@@ -2049,57 +2005,70 @@ router.get('/auth/verify-email', (req, res, next) => {
      * VERIFICATION DU COMPTE
      * ========================================================
      */
+    /*
+     * ========================================================
+     * VERIFICATION DU COMPTE DANS NEON
+     * ========================================================
+     */
 
-    const verifyTransaction = db.transaction(() => {
+    const client = await pool.connect();
 
-      const user = db.prepare(`
-        SELECT
-          id,
-          email_verified_at
-        FROM users
-        WHERE id = ?
-        LIMIT 1
-      `).get(verificationToken.user_id);
+    try {
+      await client.query('BEGIN');
 
+      const userResult = await client.query(
+        `
+          SELECT
+            id,
+            email_verified_at
+          FROM users
+          WHERE id = $1
+          LIMIT 1
+          FOR UPDATE
+        `,
+        [verificationToken.user_id]
+      );
+
+      const user = userResult.rows[0];
 
       if (!user) {
         throw new Error('USER_NOT_FOUND');
       }
 
-
       /*
-       * Si le compte était déjà vérifié,
-       * on marque simplement le token comme utilisé.
+       * Activation du compte si nécessaire.
        */
-
       if (!user.email_verified_at) {
-
-        db.prepare(`
-          UPDATE users
-          SET email_verified_at = ?
-          WHERE id = ?
-        `).run(
-          new Date().toISOString(),
-          user.id
+        await client.query(
+          `
+            UPDATE users
+            SET email_verified_at = CURRENT_TIMESTAMP
+            WHERE id = $1
+          `,
+          [user.id]
         );
-
       }
 
-
-      db.prepare(`
-        UPDATE email_verification_tokens
-        SET used_at = ?
-        WHERE id = ?
-          AND used_at IS NULL
-      `).run(
-        new Date().toISOString(),
-        verificationToken.id
+      /*
+       * Marquer le token comme utilisé.
+       */
+      await client.query(
+        `
+          UPDATE email_verification_tokens
+          SET used_at = CURRENT_TIMESTAMP
+          WHERE id = $1
+            AND used_at IS NULL
+        `,
+        [verificationToken.id]
       );
 
-    });
-
-
-    verifyTransaction();
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+  }
 
 
     /*
@@ -2230,17 +2199,22 @@ router.post('/auth/resend-verification', async (req, res, next) => {
       });
     }
 
-    const db = getDb();
+    const pool = getPostgresPool();
 
-    const user = db.prepare(`
-      SELECT
-        id,
-        email,
-        email_verified_at
-      FROM users
-      WHERE LOWER(email) = LOWER(?)
-      LIMIT 1
-    `).get(normalizedEmail);
+    const userResult = await pool.query(
+      `
+        SELECT
+          id,
+          email,
+          email_verified_at
+        FROM users
+        WHERE LOWER(email) = LOWER($1)
+        LIMIT 1
+      `,
+      [normalizedEmail]
+    );
+
+    const user = userResult.rows[0] || null;
 
     /*
      * Ne pas révéler l'existence du compte.
@@ -2266,52 +2240,62 @@ router.post('/auth/resend-verification', async (req, res, next) => {
     }
 
     /*
-     * Supprimer les anciens tokens encore inutilisés.
-     */
-    db.prepare(`
-      DELETE FROM email_verification_tokens
-      WHERE user_id = ?
-        AND used_at IS NULL
-    `).run(user.id);
-
-    /*
-     * Nouveau token.
+     * Nouveau token cryptographiquement aléatoire.
      */
     const rawToken = crypto
       .randomBytes(32)
       .toString('hex');
 
+    /*
+     * Seul le hash du token sera stocké dans Neon.
+     */
     const tokenHash = crypto
       .createHash('sha256')
       .update(rawToken)
       .digest('hex');
 
     /*
-     * Nouveau délai de validité :
-     * 24 heures.
+     * Validité du lien : 24 heures.
      */
     const expiresAt = new Date(
       Date.now() + 24 * 60 * 60 * 1000
-    ).toISOString();
-
-    db.prepare(`
-      INSERT INTO email_verification_tokens (
-        user_id,
-        token_hash,
-        expires_at
-      )
-      VALUES (?, ?, ?)
-    `).run(
-      user.id,
-      tokenHash,
-      expiresAt
     );
 
     /*
-     * Envoi réel avec Resend.
+     * Remplacer les anciens tokens encore inutilisés.
+     */
+    await pool.query(
+      `
+        DELETE FROM email_verification_tokens
+        WHERE user_id = $1
+          AND used_at IS NULL
+      `,
+      [user.id]
+    );
+
+    /*
+     * Enregistrer le nouveau token dans Neon.
+     */
+    await pool.query(
+      `
+        INSERT INTO email_verification_tokens (
+          user_id,
+          token_hash,
+          expires_at
+        )
+        VALUES ($1, $2, $3)
+      `,
+      [
+        user.id,
+        tokenHash,
+        expiresAt
+      ]
+    );
+
+    /*
+     * Envoyer l'e-mail de vérification.
      */
     try {
-
       await sendVerificationEmail({
         to: user.email,
         token: rawToken
@@ -2319,14 +2303,27 @@ router.post('/auth/resend-verification', async (req, res, next) => {
 
     } catch (emailError) {
 
-      db.prepare(`
-        DELETE FROM email_verification_tokens
-        WHERE user_id = ?
-          AND token_hash = ?
-      `).run(
-        user.id,
-        tokenHash
-      );
+      /*
+       * Si l'envoi échoue, supprimer le token créé.
+       */
+      try {
+        await pool.query(
+          `
+            DELETE FROM email_verification_tokens
+            WHERE user_id = $1
+              AND token_hash = $2
+          `,
+          [
+            user.id,
+            tokenHash
+          ]
+        );
+      } catch (cleanupError) {
+        console.error(
+          'RESEND_VERIFICATION_TOKEN_CLEANUP_FAILED:',
+          cleanupError
+        );
+      }
 
       console.error(
         'RESEND_VERIFICATION_EMAIL_FAILED:',
@@ -2404,7 +2401,7 @@ router.post('/auth/login', async (req, res, next) => {
       });
     }
 
-    const db = getDb();
+        const pool = getPostgresPool();
 
     const normalizedEmail =
       normalizeEmail(normalizedIdentifier);
@@ -2416,53 +2413,55 @@ router.post('/auth/login', async (req, res, next) => {
 
     /*
      * Si l'identifiant ressemble à un e-mail,
-     * recherche par e-mail.
+     * recherche dans Neon PostgreSQL.
      */
     if (
       normalizedEmail &&
       isValidEmail(normalizedEmail)
     ) {
+      const userResult = await pool.query(
+        `
+          SELECT *
+          FROM users
+          WHERE LOWER(email) = LOWER($1)
+          LIMIT 1
+        `,
+        [normalizedEmail]
+      );
 
-      user = db.prepare(`
-        SELECT *
-        FROM users
-        WHERE LOWER(email) = LOWER(?)
-        LIMIT 1
-      `).get(normalizedEmail);
+      user = userResult.rows[0] || null;
 
     } else {
-
       /*
-       * Sinon recherche par téléphone.
-       *
-       * On compare :
-       *
-       * - numéro national
-       * - numéro international
-       *
-       * Aucun chiffre n'est retiré.
+       * Sinon, recherche par téléphone.
+       * On conserve la compatibilité entre le
+       * numéro national et le numéro international.
        */
-
       const countryCode =
-  String(country_code || 'CG').trim().toUpperCase();
+        String(country_code || 'CG').trim().toUpperCase();
 
-const internationalPhone =
-  buildInternationalPhone(
-    normalizedPhone,
-    countryCode
-  );
+      const internationalPhone =
+        buildInternationalPhone(
+          normalizedPhone,
+          countryCode
+        );
 
-user = db.prepare(`
-  SELECT *
-  FROM users
-  WHERE phone = ?
-     OR phone = ?
-  LIMIT 1
-`).get(
-  normalizedPhone,
-  internationalPhone
-);
-    }
+      const userResult = await pool.query(
+        `
+          SELECT *
+          FROM users
+          WHERE phone = $1
+             OR phone = $2
+          LIMIT 1
+        `,
+        [
+          normalizedPhone,
+          internationalPhone
+        ]
+      );
+
+      user = userResult.rows[0] || null;
+  }
 
     /*
      * Identifiants incorrects.
@@ -2533,11 +2532,14 @@ if (!passwordOk) {
      * ========================================================
      */
 
-    const accessToken = signAccessToken({
-      id: user.id,
-      role: user.role || 'USER',
-      country_code: user.country_code || 'CG'
-    });
+    
+const accessToken = signAccessToken({
+  id: user.id,
+  staff_role: user.staff_role || 'NONE',
+  progression_title: user.progression_title || 'user',
+  country_code: user.country_code || 'CG'
+});
+    
 
 
     /*
@@ -2571,35 +2573,39 @@ if (!passwordOk) {
      * Supprimer les anciens refresh tokens
      * expirés ou révoqués de cet utilisateur.
      */
-
-    db.prepare(`
-      DELETE FROM refresh_tokens
-      WHERE user_id = ?
-        AND (
-          revoked_at IS NOT NULL
-          OR expires_at <= ?
-        )
-    `).run(
-      user.id,
-      new Date().toISOString()
+    await pool.query(
+      `
+        DELETE FROM refresh_tokens
+        WHERE user_id = $1
+          AND (
+            revoked_at IS NOT NULL
+            OR expires_at <= $2
+          )
+      `,
+      [
+        user.id,
+        new Date().toISOString()
+      ]
     );
 
-
     /*
-     * Enregistrer uniquement le hash.
+     * Enregistrer uniquement le hash
+     * du refresh token dans Neon.
      */
-
-    db.prepare(`
-      INSERT INTO refresh_tokens (
-        user_id,
-        token_hash,
-        expires_at
-      )
-      VALUES (?, ?, ?)
-    `).run(
-      user.id,
-      refreshTokenHash,
-      refreshExpiresAt
+    await pool.query(
+      `
+        INSERT INTO refresh_tokens (
+          user_id,
+          token_hash,
+          expires_at
+        )
+        VALUES ($1, $2, $3)
+      `,
+      [
+        user.id,
+        refreshTokenHash,
+        refreshExpiresAt
+      ]
     );
 
 
@@ -2629,16 +2635,19 @@ if (!passwordOk) {
       success: true,
       access_token: accessToken,
       token: accessToken,
-      user: {
-        id: user.id,
-        email: user.email,
-        phone: user.phone,
-        country_code: user.country_code,
-        role: user.role,
-        status: user.status,
-        email_verified: true,
-        email_verified_at: user.email_verified_at,
-        created_at: user.created_at
+      
+user: {
+  id: user.id,
+  email: user.email,
+  phone: user.phone,
+  country_code: user.country_code,
+  role: user.role,
+  progression_title: user.progression_title,
+  staff_role: user.staff_role,
+  status: user.status,
+  email_verified: true,
+  email_verified_at: user.email_verified_at,
+  created_at: user.created_at
       }
     });
 
@@ -2654,15 +2663,12 @@ if (!passwordOk) {
  * ============================================================
  */
 
-router.post('/auth/refresh', (req, res, next) => {
-  try {
 
-    /*
-     * Lire le cookie refresh token.
-     */
-    const cookies = String(
-      req.headers.cookie || ''
-    )
+router.post('/auth/refresh', async (req, res, next) => {
+  let client;
+
+  try {
+    const cookies = String(req.headers.cookie || '')
       .split(';')
       .map(x => x.trim());
 
@@ -2673,71 +2679,52 @@ router.post('/auth/refresh', (req, res, next) => {
     if (!refreshCookie) {
       return res.status(401).json({
         error: 'REFRESH_TOKEN_REQUIRED',
-        message:
-          'Refresh token required'
+        message: 'Refresh token required'
       });
     }
 
-    const refreshToken =
-      refreshCookie.substring(
-        'bz_refresh_token='.length
-      );
+    const refreshToken = refreshCookie.substring(
+      'bz_refresh_token='.length
+    );
 
     if (!refreshToken) {
       return res.status(401).json({
         error: 'INVALID_REFRESH_TOKEN',
-        message:
-          'Invalid refresh token'
+        message: 'Invalid refresh token'
       });
     }
 
+    const refreshTokenHash = hashRefreshToken(refreshToken);
+    const pool = getPostgresPool();
 
-    /*
-     * Calculer le hash du token reçu.
-     */
-    const refreshTokenHash =
-      hashRefreshToken(refreshToken);
+    client = await pool.connect();
+    await client.query('BEGIN');
 
-
-    const db = getDb();
-
-
-    /*
-     * Chercher uniquement un token :
-     * - correspondant au hash
-     * - non révoqué
-     * - non expiré
-     */
-    const storedToken = db.prepare(`
-      SELECT
-        rt.id,
-        rt.user_id,
-        rt.expires_at,
-        u.role,
-        u.country_code,
-        u.status,
-        u.email_verified_at
-      FROM refresh_tokens rt
-      INNER JOIN users u
-        ON u.id = rt.user_id
-      WHERE rt.token_hash = ?
-        AND rt.revoked_at IS NULL
-        AND rt.expires_at > ?
-      LIMIT 1
-    `).get(
-      refreshTokenHash,
-      new Date().toISOString()
+    const storedTokenResult = await client.query(
+      `
+        SELECT
+          rt.id,
+          rt.user_id,
+          u.staff_role,
+          u.progression_title,
+          u.country_code,
+          u.status
+        FROM refresh_tokens rt
+        INNER JOIN users u ON u.id = rt.user_id
+        WHERE rt.token_hash = $1
+          AND rt.revoked_at IS NULL
+          AND rt.expires_at > CURRENT_TIMESTAMP
+        LIMIT 1
+        FOR UPDATE OF rt
+      `,
+      [refreshTokenHash]
     );
 
+    const storedToken = storedTokenResult.rows[0] || null;
 
-    /*
-     * Token absent, expiré ou révoqué.
-     */
     if (!storedToken) {
+      await client.query('ROLLBACK');
 
-      /*
-       * Effacer le cookie invalide.
-       */
       res.setHeader(
         'Set-Cookie',
         'bz_refresh_token=; Max-Age=0; Path=/api/auth; HttpOnly; Secure; SameSite=Lax'
@@ -2745,94 +2732,72 @@ router.post('/auth/refresh', (req, res, next) => {
 
       return res.status(401).json({
         error: 'INVALID_REFRESH_TOKEN',
-        message:
-          'Invalid or expired refresh token'
+        message: 'Invalid or expired refresh token'
       });
     }
 
-
-    /*
-     * Vérifier que le compte est toujours actif.
-     */
     if (
       storedToken.status &&
       String(storedToken.status).toUpperCase() !== 'ACTIVE'
     ) {
+      await client.query('ROLLBACK');
 
       return res.status(403).json({
         error: 'ACCOUNT_DISABLED',
-        message:
-          'This account is not active'
+        message: 'This account is not active'
       });
     }
 
-
-    /*
-     * ========================================================
-     * ROTATION DU REFRESH TOKEN
-     * ========================================================
-     *
-     * L'ancien token est immédiatement révoqué.
-     * Un nouveau refresh token est créé.
-     */
-
-    db.prepare(`
-      UPDATE refresh_tokens
-      SET revoked_at = ?
-      WHERE id = ?
-    `).run(
-      new Date().toISOString(),
-      storedToken.id
+    const revokeResult = await client.query(
+      `
+        UPDATE refresh_tokens
+        SET revoked_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+          AND revoked_at IS NULL
+      `,
+      [storedToken.id]
     );
 
+    if (revokeResult.rowCount !== 1) {
+      throw new Error('REFRESH_TOKEN_REVOCATION_FAILED');
+    }
 
-    const newRefreshToken =
-      generateRefreshToken();
+    const newRefreshToken = generateRefreshToken();
+    const newRefreshTokenHash = hashRefreshToken(newRefreshToken);
 
-    const newRefreshTokenHash =
-      hashRefreshToken(newRefreshToken);
+    const newRefreshExpiresAt = new Date(
+      Date.now() + 30 * 24 * 60 * 60 * 1000
+    ).toISOString();
 
-    const newRefreshExpiresAt =
-      new Date(
-        Date.now() +
-        30 * 24 * 60 * 60 * 1000
-      ).toISOString();
-
-
-    db.prepare(`
-      INSERT INTO refresh_tokens (
-        user_id,
-        token_hash,
-        expires_at
-      )
-      VALUES (?, ?, ?)
-    `).run(
-      storedToken.user_id,
-      newRefreshTokenHash,
-      newRefreshExpiresAt
+    await client.query(
+      `
+        INSERT INTO refresh_tokens (
+          user_id,
+          token_hash,
+          expires_at
+        )
+        VALUES ($1, $2, $3)
+      `,
+      [
+        storedToken.user_id,
+        newRefreshTokenHash,
+        newRefreshExpiresAt
+      ]
     );
 
+    const accessToken = signAccessToken({
+      id: storedToken.user_id,
+      staff_role: storedToken.staff_role || 'NONE',
+      progression_title: storedToken.progression_title || 'user',
+      country_code: storedToken.country_code || 'CG'
+    });
 
-    /*
-     * Créer le nouvel access token.
-     */
-    const accessToken =
-      signAccessToken({
-        id: storedToken.user_id,
-        role: storedToken.role || 'USER',
-        country_code:
-          storedToken.country_code || 'CG'
-      });
+    await client.query('COMMIT');
 
-
-    /*
-     * Remplacer le cookie par le nouveau refresh token.
-     */
     res.setHeader(
       'Set-Cookie',
       `bz_refresh_token=${newRefreshToken}; Max-Age=2592000; Path=/api/auth; HttpOnly; Secure; SameSite=Lax`
     );
-
 
     return res.status(200).json({
       success: true,
@@ -2841,10 +2806,23 @@ router.post('/auth/refresh', (req, res, next) => {
     });
 
   } catch (error) {
+    if (client) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        console.error('REFRESH_ROLLBACK_FAILED:', rollbackError);
+      }
+    }
+
     next(error);
+
+  } finally {
+    if (client) {
+      client.release();
+    }
   }
 });
-
+    
   /*
  * ============================================================
  * LOGOUT
@@ -2855,7 +2833,7 @@ router.post('/auth/refresh', (req, res, next) => {
  * le cookie de session.
  */
 
-router.post('/auth/logout', (req, res, next) => {
+router.post('/auth/logout', async (req, res, next) => {
   try {
 
     const cookies = String(
@@ -2884,21 +2862,24 @@ router.post('/auth/logout', (req, res, next) => {
 
         const refreshTokenHash =
           hashRefreshToken(refreshToken);
-
-        const db = getDb();
+        const pool = getPostgresPool();
 
         /*
          * Révoquer uniquement le token actuel.
          */
-        db.prepare(`
-          UPDATE refresh_tokens
-          SET revoked_at = ?
-          WHERE token_hash = ?
-            AND revoked_at IS NULL
-        `).run(
-          new Date().toISOString(),
-          refreshTokenHash
-        );
+        await pool.query(
+          `
+            UPDATE refresh_tokens
+            SET revoked_at = $1
+            WHERE token_hash = $2
+              AND revoked_at IS NULL
+          `,
+          [
+            new Date().toISOString(),
+            refreshTokenHash
+            ]
+          );
+
       }
     }
 
@@ -3174,170 +3155,188 @@ router.get('/auth/google/callback', async (req, res, next) => {
     }
 
 
-    const db = getDb();
+       const pool = getPostgresPool();
+const client = await pool.connect();
 
+let accessToken;
+let refreshToken;
 
-    /*
-     * ========================================================
-     * RECHERCHE PAR GOOGLE SUB
-     * ========================================================
-     */
+try {
+  await client.query('BEGIN');
 
-    let user = db.prepare(`
+  /*
+   * Recherche du compte déjà lié à Google.
+   */
+  const googleUserResult = await client.query(
+    `
       SELECT *
       FROM users
-      WHERE google_sub = ?
+      WHERE google_sub = $1
       LIMIT 1
-    `).get(googleSub);
+      FOR UPDATE
+    `,
+    [googleSub]
+  );
 
+  let user = googleUserResult.rows[0] || null;
 
-    /*
-     * ========================================================
-     * SI GOOGLE N'EST PAS ENCORE LIE :
-     * RECHERCHE PAR EMAIL
-     * ========================================================
-     */
-
-    if (!user) {
-
-      user = db.prepare(`
+  /*
+   * Si Google n'est pas encore lié, rechercher
+   * le compte Bezzy Tasks par email.
+   */
+  if (!user) {
+    const emailUserResult = await client.query(
+      `
         SELECT *
         FROM users
-        WHERE LOWER(email) = LOWER(?)
+        WHERE LOWER(TRIM(email)) = LOWER(TRIM($1))
         LIMIT 1
-      `).get(googleEmail);
+        FOR UPDATE
+      `,
+      [googleEmail]
+    );
 
+    user = emailUserResult.rows[0] || null;
 
-      /*
-       * Compte existant :
-       * on lie le compte Google.
-       */
-      if (user) {
+    if (!user) {
+      await client.query('ROLLBACK');
 
-        db.prepare(`
-          UPDATE users
-          SET
-            google_sub = ?,
-            email_verified_at =
-              COALESCE(
-                email_verified_at,
-                ?
-              )
-          WHERE id = ?
-        `).run(
-          googleSub,
-          new Date().toISOString(),
-          user.id
-        );
-
-        user = db.prepare(`
-          SELECT *
-          FROM users
-          WHERE id = ?
-          LIMIT 1
-        `).get(user.id);
-
-      } else {
-
-        /*
-         * ====================================================
-         * COMPTE GOOGLE INEXISTANT
-         * ====================================================
-         *
-         * Un compte Google ne doit PAS créer automatiquement
-         * un compte Bezzy Tasks.
-         *
-         * L'utilisateur doit d'abord créer son compte
-         * Bezzy Tasks.
-         */
-
-        return res.redirect(
-          '/?google_error=' +
-          encodeURIComponent(
-            'Aucun compte Bezzy Tasks n’est associé à cette adresse Google. Créez d’abord votre compte.'
-          )
-        );
-      }
-    }
-
-
-    /*
-     * ========================================================
-     * COMPTE DESACTIVE
-     * ========================================================
-     */
-
-    if (
-      user.status &&
-      String(user.status).toUpperCase() !== 'ACTIVE'
-    ) {
-      return res.status(403).send(
-        'This Bezzy Tasks account is not active.'
+      return res.redirect(
+        '/?google_error=' +
+        encodeURIComponent(
+          'Aucun compte Bezzy Tasks n’est associé à cette adresse Google. Créez d’abord votre compte.'
+        )
       );
     }
 
     /*
-     * ========================================================
-     * JWT BEZZY TASKS + REFRESH TOKEN
-     * ========================================================
-     *
-     * Google utilise le même système de session longue
-     * durée que la connexion e-mail / mot de passe.
+     * Empêcher de rattacher un autre compte Google
+     * à un compte Bezzy Tasks déjà lié.
      */
+    if (
+      user.google_sub &&
+      String(user.google_sub) !== googleSub
+    ) {
+      await client.query('ROLLBACK');
 
-    const accessToken = signAccessToken({
-      id: user.id,
-      role: user.role || 'USER',
-      country_code: user.country_code || 'CG'
-    });
+      return res.status(409).send(
+        'This account is already linked to another Google account.'
+      );
+    }
 
-
-    const refreshToken =
-      generateRefreshToken();
-
-    const refreshTokenHash =
-      hashRefreshToken(refreshToken);
-
-    const refreshExpiresAt = new Date(
-      Date.now() +
-      30 * 24 * 60 * 60 * 1000
-    ).toISOString();
-
-
-    /*
-     * Nettoyer les anciens tokens inutilisables
-     * de cet utilisateur.
-     */
-    db.prepare(`
-      DELETE FROM refresh_tokens
-      WHERE user_id = ?
-        AND (
-          revoked_at IS NOT NULL
-          OR expires_at <= ?
-        )
-    `).run(
-      user.id,
-      new Date().toISOString()
+    const linkedUserResult = await client.query(
+      `
+        UPDATE users
+        SET
+          google_sub = $1,
+          email_verified_at = COALESCE(
+            email_verified_at,
+            CURRENT_TIMESTAMP
+          )
+        WHERE id = $2
+          AND (
+            google_sub IS NULL
+            OR google_sub = $1
+          )
+        RETURNING *
+      `,
+      [googleSub, user.id]
     );
 
+    user = linkedUserResult.rows[0] || null;
 
-    /*
-     * Enregistrer uniquement le hash.
-     */
-    db.prepare(`
+    if (!user) {
+      throw new Error('GOOGLE_ACCOUNT_LINK_FAILED');
+    }
+  }
+
+  /*
+   * Vérification du statut du compte.
+   */
+  if (
+    user.status &&
+    String(user.status).toUpperCase() !== 'ACTIVE'
+  ) {
+    await client.query('ROLLBACK');
+
+    return res.status(403).send(
+      'This Bezzy Tasks account is not active.'
+    );
+  }
+
+  /*
+   * Création du jeton d'accès.
+   */
+  accessToken = signAccessToken({
+    id: user.id,
+    staff_role: user.staff_role || 'NONE',
+    progression_title: user.progression_title || 'user',
+    country_code: user.country_code || 'CG'
+  });
+
+  /*
+   * Création du refresh token.
+   */
+  refreshToken = generateRefreshToken();
+
+  const refreshTokenHash =
+    hashRefreshToken(refreshToken);
+
+  const refreshExpiresAt = new Date(
+    Date.now() + 30 * 24 * 60 * 60 * 1000
+  ).toISOString();
+
+  /*
+   * Nettoyage des anciens refresh tokens.
+   */
+  await client.query(
+    `
+      DELETE FROM refresh_tokens
+      WHERE user_id = $1
+        AND (
+          revoked_at IS NOT NULL
+          OR expires_at <= CURRENT_TIMESTAMP
+        )
+    `,
+    [user.id]
+  );
+
+  /*
+   * Enregistrement du nouveau refresh token.
+   */
+  await client.query(
+    `
       INSERT INTO refresh_tokens (
         user_id,
         token_hash,
         expires_at
       )
-      VALUES (?, ?, ?)
-    `).run(
+      VALUES ($1, $2, $3)
+    `,
+    [
       user.id,
       refreshTokenHash,
       refreshExpiresAt
+    ]
+  );
+
+  await client.query('COMMIT');
+
+} catch (error) {
+  await client.query('ROLLBACK').catch(() => {});
+
+  if (error.code === '23505') {
+    return res.status(409).send(
+      'This Google account is already linked to another account.'
     );
+  }
 
+  throw error;
 
+} finally {
+  client.release();
+  } 
+        
     /*
      * Créer le cookie de session longue durée.
      */
@@ -3372,28 +3371,35 @@ router.get('/auth/google/callback', async (req, res, next) => {
  * ============================================================
  */
 
-router.get('/me', requireAuth, (req, res, next) => {
+router.get('/me', requireAuth, async (req, res, next) => {
   try {
+    const pool = getPostgresPool();
 
-    const db = getDb();
+    const userResult = await pool.query(
+      `
+        
+SELECT
+  id,
+  email,
+  phone,
+  country_code,
+  referral_code,
+  referred_by_code,
+  full_name,
+  role,
+  progression_title,
+  staff_role,
+  status,
+  email_verified_at,
+  created_at
+        FROM users
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [req.user.sub]
+    );
 
-    const user = db.prepare(`
-      SELECT
-        id,
-        email,
-        phone,
-        country_code,
-        referral_code,
-        referred_by_code,
-        full_name,
-        role,
-        status,
-        email_verified_at,
-        created_at
-      FROM users
-      WHERE id = ?
-      LIMIT 1
-    `).get(req.user.sub);
+    const user = userResult.rows[0] || null;
 
     if (!user) {
       return res.status(404).json({
@@ -3402,46 +3408,53 @@ router.get('/me', requireAuth, (req, res, next) => {
       });
     }
 
-    const balanceRow = db.prepare(`
-      SELECT
-        COALESCE(
-          SUM(
-            CASE
-              WHEN direction = 'CREDIT'
-                THEN amount_minor
-              ELSE -amount_minor
-            END
-          ),
-          0
-        ) AS balance
-      FROM ledger_entries
-      WHERE user_id = ?
-    `).get(user.id);
+    const balanceResult = await pool.query(
+      `
+        SELECT
+          COALESCE(
+            SUM(
+              CASE
+                WHEN direction = 'CREDIT'
+                  THEN amount_minor
+                ELSE -amount_minor
+              END
+            ),
+            0
+          ) AS balance
+        FROM ledger_entries
+        WHERE user_id = $1
+      `,
+      [user.id]
+    );
 
-    const earnedRow = db.prepare(`
-      SELECT
-        COALESCE(
-          SUM(
-            CASE
-              WHEN direction = 'CREDIT'
-                THEN amount_minor
-              ELSE 0
-            END
-          ),
-          0
-        ) AS total_earned
-      FROM ledger_entries
-      WHERE user_id = ?
-    `).get(user.id);
+    const earnedResult = await pool.query(
+      `
+        SELECT
+          COALESCE(
+            SUM(
+              CASE
+                WHEN direction = 'CREDIT'
+                  THEN amount_minor
+                ELSE 0
+              END
+            ),
+            0
+          ) AS total_earned
+        FROM ledger_entries
+        WHERE user_id = $1
+      `,
+      [user.id]
+    );
+
+    const balanceRow = balanceResult.rows[0] || {};
+    const earnedRow = earnedResult.rows[0] || {};
 
     return res.json({
       user: {
         ...user,
         balance: Number(balanceRow.balance || 0),
         total_earned: Number(earnedRow.total_earned || 0),
-        email_verified: Boolean(
-          user.email_verified_at
-        )
+        email_verified: Boolean(user.email_verified_at)
       }
     });
 
@@ -3458,24 +3471,31 @@ router.get('/me', requireAuth, (req, res, next) => {
  * Petite route utile pour vérifier l'état du compte.
  */
 
-router.get('/auth/status', requireAuth, (req, res, next) => {
+router.get('/auth/status', requireAuth, async (req, res, next) => {
   try {
+    const pool = getPostgresPool();
 
-    const db = getDb();
+    const userResult = await pool.query(
+      `
+        
+SELECT
+  id,
+  email,
+  phone,
+  country_code,
+  role,
+  progression_title,
+  staff_role,
+  status,
+  email_verified_at
+        FROM users
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [req.user.sub]
+    );
 
-    const user = db.prepare(`
-      SELECT
-        id,
-        email,
-        phone,
-        country_code,
-        role,
-        status,
-        email_verified_at
-      FROM users
-      WHERE id = ?
-      LIMIT 1
-    `).get(req.user.sub);
+    const user = userResult.rows[0] || null;
 
     if (!user) {
       return res.status(404).json({
@@ -3485,18 +3505,19 @@ router.get('/auth/status', requireAuth, (req, res, next) => {
 
     return res.json({
       authenticated: true,
-      email_verified: Boolean(
-        user.email_verified_at
-      ),
-      user: {
-        id: user.id,
-        email: user.email,
-        phone: user.phone,
-        country_code: user.country_code,
-        role: user.role,
-        status: user.status
+      email_verified: Boolean(user.email_verified_at),
+      
+user: {
+  id: user.id,
+  email: user.email,
+  phone: user.phone,
+  country_code: user.country_code,
+  role: user.role,
+  progression_title: user.progression_title,
+  staff_role: user.staff_role,
+  status: user.status
       }
-    });
+      });
 
   } catch (error) {
     next(error);
@@ -3574,12 +3595,11 @@ try {
   const adminRouter = require('./admin');
 
   router.use(
-  '/admin',
+    '/admin',
   requireAuth,
   requireRole(
-    'super_admin',
-    'admin',
-    'moderator'
+    'PLATFORM_ADMIN',
+    'PLATFORM_MODERATOR'
   ),
   adminRouter
 );
