@@ -3155,192 +3155,188 @@ router.get('/auth/google/callback', async (req, res, next) => {
     }
 
 
-        const pool = getPostgresPool();
+       const pool = getPostgresPool();
+const client = await pool.connect();
 
+let accessToken;
+let refreshToken;
 
-    /*
-     * ========================================================
-     * RECHERCHE PAR GOOGLE SUB
-     * ========================================================
-     */
+try {
+  await client.query('BEGIN');
 
-    const googleUserResult = await pool.query(
+  /*
+   * Recherche du compte déjà lié à Google.
+   */
+  const googleUserResult = await client.query(
+    `
+      SELECT *
+      FROM users
+      WHERE google_sub = $1
+      LIMIT 1
+      FOR UPDATE
+    `,
+    [googleSub]
+  );
+
+  let user = googleUserResult.rows[0] || null;
+
+  /*
+   * Si Google n'est pas encore lié, rechercher
+   * le compte Bezzy Tasks par email.
+   */
+  if (!user) {
+    const emailUserResult = await client.query(
       `
         SELECT *
         FROM users
-        WHERE google_sub = $1
+        WHERE LOWER(TRIM(email)) = LOWER(TRIM($1))
         LIMIT 1
+        FOR UPDATE
       `,
-      [googleSub]
+      [googleEmail]
     );
 
-    let user = googleUserResult.rows[0] || null;
-
-
-    /*
-     * ========================================================
-     * SI GOOGLE N'EST PAS ENCORE LIE :
-     * RECHERCHE PAR EMAIL
-     * ========================================================
-     */
+    user = emailUserResult.rows[0] || null;
 
     if (!user) {
+      await client.query('ROLLBACK');
 
-            const emailUserResult = await pool.query(
-        `
-          SELECT *
-          FROM users
-          WHERE LOWER(email) = LOWER($1)
-          LIMIT 1
-        `,
-        [googleEmail]
-      );
-
-      user = emailUserResult.rows[0] || null;
-
-
-      /*
-       * Compte existant :
-       * on lie le compte Google.
-       */
-      if (user) {
-        const linkedUserResult = await pool.query(
-          `
-            UPDATE users
-            SET
-              google_sub = $1,
-              email_verified_at = COALESCE(
-                email_verified_at,
-                $2
-              )
-            WHERE id = $3
-            RETURNING *
-          `,
-          [
-            googleSub,
-            new Date().toISOString(),
-            user.id
-          ]
-        );
-
-        user = linkedUserResult.rows[0] || null;
-
-        if (!user) {
-          return res.status(404).send(
-            'Bezzy Tasks account not found.'
-          );
-        }
-
-      } else {
-
-        /*
-         * ====================================================
-         * COMPTE GOOGLE INEXISTANT
-         * ====================================================
-         *
-         * Un compte Google ne doit PAS créer automatiquement
-         * un compte Bezzy Tasks.
-         *
-         * L'utilisateur doit d'abord créer son compte
-         * Bezzy Tasks.
-         */
-
-        return res.redirect(
-          '/?google_error=' +
-          encodeURIComponent(
-            'Aucun compte Bezzy Tasks n’est associé à cette adresse Google. Créez d’abord votre compte.'
-          )
-        );
-      }
-    }
-
-
-    /*
-     * ========================================================
-     * COMPTE DESACTIVE
-     * ========================================================
-     */
-
-    if (
-      user.status &&
-      String(user.status).toUpperCase() !== 'ACTIVE'
-    ) {
-      return res.status(403).send(
-        'This Bezzy Tasks account is not active.'
-      );
-    }
-
-    /*
-     * ========================================================
-     * JWT BEZZY TASKS + REFRESH TOKEN
-     * ========================================================
-     *
-     * Google utilise le même système de session longue
-     * durée que la connexion e-mail / mot de passe.
-     */
-
-    
-const accessToken = signAccessToken({
-  id: user.id,
-  staff_role: user.staff_role || 'NONE',
-  progression_title: user.progression_title || 'user',
-  country_code: user.country_code || 'CG'
-});
-    
-
-
-    const refreshToken =
-      generateRefreshToken();
-
-    const refreshTokenHash =
-      hashRefreshToken(refreshToken);
-
-    const refreshExpiresAt = new Date(
-      Date.now() +
-      30 * 24 * 60 * 60 * 1000
-    ).toISOString();
-
-
-    /*
-     * Nettoyer les anciens tokens inutilisables
-     * de cet utilisateur.
-     */
-        await pool.query(
-      `
-        DELETE FROM refresh_tokens
-        WHERE user_id = $1
-          AND (
-            revoked_at IS NOT NULL
-            OR expires_at <= $2
-          )
-      `,
-      [
-        user.id,
-        new Date().toISOString()
-      ]
-    );
-
-
-    /*
-     * Enregistrer uniquement le hash.
-     */
-    await pool.query(
-      `
-        INSERT INTO refresh_tokens (
-          user_id,
-          token_hash,
-          expires_at
+      return res.redirect(
+        '/?google_error=' +
+        encodeURIComponent(
+          'Aucun compte Bezzy Tasks n’est associé à cette adresse Google. Créez d’abord votre compte.'
         )
-        VALUES ($1, $2, $3)
+      );
+    }
+
+    /*
+     * Empêcher de rattacher un autre compte Google
+     * à un compte Bezzy Tasks déjà lié.
+     */
+    if (
+      user.google_sub &&
+      String(user.google_sub) !== googleSub
+    ) {
+      await client.query('ROLLBACK');
+
+      return res.status(409).send(
+        'This account is already linked to another Google account.'
+      );
+    }
+
+    const linkedUserResult = await client.query(
+      `
+        UPDATE users
+        SET
+          google_sub = $1,
+          email_verified_at = COALESCE(
+            email_verified_at,
+            CURRENT_TIMESTAMP
+          )
+        WHERE id = $2
+          AND (
+            google_sub IS NULL
+            OR google_sub = $1
+          )
+        RETURNING *
       `,
-      [
-        user.id,
-        refreshTokenHash,
-        refreshExpiresAt
-      ]
+      [googleSub, user.id]
     );
 
+    user = linkedUserResult.rows[0] || null;
 
+    if (!user) {
+      throw new Error('GOOGLE_ACCOUNT_LINK_FAILED');
+    }
+  }
+
+  /*
+   * Vérification du statut du compte.
+   */
+  if (
+    user.status &&
+    String(user.status).toUpperCase() !== 'ACTIVE'
+  ) {
+    await client.query('ROLLBACK');
+
+    return res.status(403).send(
+      'This Bezzy Tasks account is not active.'
+    );
+  }
+
+  /*
+   * Création du jeton d'accès.
+   */
+  accessToken = signAccessToken({
+    id: user.id,
+    staff_role: user.staff_role || 'NONE',
+    progression_title: user.progression_title || 'user',
+    country_code: user.country_code || 'CG'
+  });
+
+  /*
+   * Création du refresh token.
+   */
+  refreshToken = generateRefreshToken();
+
+  const refreshTokenHash =
+    hashRefreshToken(refreshToken);
+
+  const refreshExpiresAt = new Date(
+    Date.now() + 30 * 24 * 60 * 60 * 1000
+  ).toISOString();
+
+  /*
+   * Nettoyage des anciens refresh tokens.
+   */
+  await client.query(
+    `
+      DELETE FROM refresh_tokens
+      WHERE user_id = $1
+        AND (
+          revoked_at IS NOT NULL
+          OR expires_at <= CURRENT_TIMESTAMP
+        )
+    `,
+    [user.id]
+  );
+
+  /*
+   * Enregistrement du nouveau refresh token.
+   */
+  await client.query(
+    `
+      INSERT INTO refresh_tokens (
+        user_id,
+        token_hash,
+        expires_at
+      )
+      VALUES ($1, $2, $3)
+    `,
+    [
+      user.id,
+      refreshTokenHash,
+      refreshExpiresAt
+    ]
+  );
+
+  await client.query('COMMIT');
+
+} catch (error) {
+  await client.query('ROLLBACK').catch(() => {});
+
+  if (error.code === '23505') {
+    return res.status(409).send(
+      'This Google account is already linked to another account.'
+    );
+  }
+
+  throw error;
+
+} finally {
+  client.release();
+  } 
+        
     /*
      * Créer le cookie de session longue durée.
      */
